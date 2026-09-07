@@ -41,10 +41,6 @@ const { Option } = Select;
 const { TextArea } = Input;
 const { Text } = Typography;
 
-const POWER_GRID_TYPES: Array<'学术论文' | '发明专利' | '软件著作权' | '标准规范'> = [
-  '学术论文', '发明专利', '软件著作权', '标准规范',
-];
-
 export function IndicatorConfigPage() {
   const {
     project,
@@ -52,8 +48,6 @@ export function IndicatorConfigPage() {
     units,
     nodes,
     indicators,
-    topicPowerGridRequirements,
-    topicNodeTargets,
     addNode,
     updateNode,
     removeNode,
@@ -61,9 +55,9 @@ export function IndicatorConfigPage() {
     removeIndicator,
     batchUpdateIndicators,
     updateTopic,
+    topicPowerGridRequirements,
     addPowerGridReq,
     updatePowerGridReq,
-    addOperationRecord,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState('topic-config');
@@ -72,14 +66,11 @@ export function IndicatorConfigPage() {
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
 
-  // Drawer state for topic editing
   const [topicDrawerOpen, setTopicDrawerOpen] = useState(false);
   const [editingTopicId, setEditingTopicId] = useState<string>('');
 
   const [nodeForm] = Form.useForm();
 
-  // Operation record filters
-  // Maps
   const topicMap = Object.fromEntries(topics.map((t) => [t.id, t]));
   const nodeMap = Object.fromEntries(nodes.map((n) => [n.id, n]));
   const unitMap = Object.fromEntries(units.map((u) => [u.id, u.name]));
@@ -98,34 +89,10 @@ export function IndicatorConfigPage() {
     };
     if (editingNode) {
       updateNode(editingNode.id, payload);
-      addOperationRecord({
-        id: `or-${Date.now()}`,
-        projectId: project.id,
-        module: '时间节点配置',
-        operationType: '修改',
-        objectType: '时间节点',
-        objectId: editingNode.id,
-        objectName: payload.name,
-        description: `修改时间节点：${payload.name}`,
-        operator: '当前用户',
-        operatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      });
       message.success('更新时间节点成功');
     } else {
       const id = `node-${Date.now()}`;
       addNode({ ...payload, id });
-      addOperationRecord({
-        id: `or-${Date.now()}`,
-        projectId: project.id,
-        module: '时间节点配置',
-        operationType: '新增',
-        objectType: '时间节点',
-        objectId: id,
-        objectName: payload.name,
-        description: `新增时间节点：${payload.name}`,
-        operator: '当前用户',
-        operatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      });
       message.success('新增时间节点成功');
     }
     setNodeFormVisible(false);
@@ -162,11 +129,8 @@ export function IndicatorConfigPage() {
   };
 
   const editingTopic = editingTopicId ? topicMap[editingTopicId] : null;
-  const editingPowerGridReqs = editingTopicId
-    ? topicPowerGridRequirements.filter((r) => r.topicId === editingTopicId)
-    : [];
+  const editingPowerGridReqs = editingTopicId ? topicPowerGridRequirements.filter((r) => r.topicId === editingTopicId) : [];
 
-  // Topic save handlers
   const handleSaveTopicBasic = (values: any, topic: Topic) => {
     updateTopic(topic.id, {
       code: values.code, name: values.name,
@@ -179,82 +143,38 @@ export function IndicatorConfigPage() {
       financeAssistantPhone: values.financeAssistantPhone || '',
       remarks: values.remarks || '',
     });
-    addOperationRecord({
-      id: `or-${Date.now()}`,
-      projectId: project.id,
-      module: '课题配置',
-      operationType: '修改',
-      objectType: '课题',
-      objectId: topic.id,
-      objectName: values.name,
-      description: `修改课题基本信息：${values.name}`,
-      operator: '当前用户',
-      operatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-    });
     message.success('基本信息更新成功');
   };
 
   const handleSaveTopicUnits = (values: any, topic: Topic) => {
-    const participatingUnitIds = values.participatingUnits
+    const pUnits = values.participatingUnits
       ? values.participatingUnits.split(/[,，、\n]/).map((s: string) => s.trim()).filter(Boolean)
       : [];
     updateTopic(topic.id, {
       leadingUnitId: values.leadingUnit,
-      participatingUnitIds,
-    });
-    addOperationRecord({
-      id: `or-${Date.now()}`, projectId: project.id, module: '课题配置', operationType: '修改',
-      objectType: '课题', objectId: topic.id, objectName: topic.name,
-      description: `修改课题参与单位：${topic.name}`, operator: '当前用户',
-      operatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      participatingUnitIds: pUnits,
     });
     message.success('参与单位更新成功');
   };
 
   const handleSaveTopicReq = (values: any, topic: Topic) => {
     const overallReqs: Record<string, number> = {};
-    ACHIEVEMENT_TYPES.forEach((type) => {
-      overallReqs[type] = values[`req_${type}`] ?? 0;
-    });
+    ACHIEVEMENT_TYPES.forEach((type) => { overallReqs[type] = values[`req_${type}`] ?? 0; });
     updateTopic(topic.id, {
       domesticJournalRequiredCount: values.domesticJournalRequiredCount ?? 0,
       topicOverallRequirements: overallReqs,
     });
-    addOperationRecord({
-      id: `or-${Date.now()}`, projectId: project.id, module: '课题配置', operationType: '修改',
-      objectType: '课题', objectId: topic.id, objectName: topic.name,
-      description: `修改课题成果要求：${topic.name}`, operator: '当前用户',
-      operatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-    });
     message.success('成果要求更新成功');
   };
 
-  const handleSavePowerGridReqs = (valuesArray: { achievementType: string; requiredCount: number }[], topic: Topic) => {
-    valuesArray.forEach((val) => {
-      const existing = editingPowerGridReqs.find((r) => r.achievementType === val.achievementType);
+  const handleSavePowerGridReqs = (values: { achievementType: string; requiredCount: number }[], topic: Topic) => {
+    values.forEach((val) => {
+      const existing = topicPowerGridRequirements.find((r) => r.topicId === topic.id && r.achievementType === val.achievementType);
       if (existing) {
         updatePowerGridReq(existing.id, { requiredCount: val.requiredCount });
       } else if (val.requiredCount > 0) {
-        addPowerGridReq({
-          id: `pgr-${Date.now()}-${val.achievementType}`,
-          projectId: project.id,
-          topicId: topic.id,
-          achievementType: val.achievementType as '学术论文' | '发明专利' | '软件著作权' | '标准规范',
-          requiredCount: val.requiredCount,
-        });
+        addPowerGridReq({ id: `pgr-${Date.now()}-${val.achievementType}`, projectId: project.id, topicId: topic.id, achievementType: val.achievementType as any, requiredCount: val.requiredCount });
       }
-    });
-    addOperationRecord({
-      id: `or-${Date.now()}`,
-      projectId: project.id,
-      module: '课题配置',
-      operationType: '修改',
-      objectType: '课题',
-      objectId: topic.id,
-      objectName: topic.name,
-      description: `修改电网公司主导成果要求：${topic.name}`,
-      operator: '当前用户',
-      operatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
     });
     message.success('电网公司成果要求更新成功');
   };
@@ -263,22 +183,14 @@ export function IndicatorConfigPage() {
   const selectedTopic = selectedTopicId ? topicMap[selectedTopicId] : null;
   const selectedNode = selectedNodeId ? nodeMap[selectedNodeId] : null;
 
-  // Units for the selected topic
   const topicUnitIds = selectedTopic
     ? [selectedTopic.leadingUnitId, ...selectedTopic.participatingUnitIds]
     : [];
 
-  // Indicators for the selected topic
   const topicIndicators = selectedTopicId
     ? indicators.filter((i) => i.topicId === selectedTopicId)
     : [];
 
-  // Node targets for selected topic + node
-  const currentNodeTargets = selectedTopicId && selectedNodeId
-    ? topicNodeTargets.filter((t) => t.topicId === selectedTopicId && t.nodeId === selectedNodeId)
-    : [];
-
-  // Build matrix: rows = units, columns = achievement types
   const SEP = '::';
   const [matrixEdits, setMatrixEdits] = useState<Record<string, number>>({});
 
@@ -348,7 +260,6 @@ export function IndicatorConfigPage() {
       }
     });
 
-    // Handle zero indicators - remove them
     const zeroEntries = Object.entries(matrixEdits).filter(([, qty]) => qty === 0);
     zeroEntries.forEach(([key]) => {
       const { unitId, type } = parseKey(key);
@@ -367,23 +278,10 @@ export function IndicatorConfigPage() {
       addIndicator(ind);
     });
 
-    addOperationRecord({
-      id: `or-${Date.now()}`,
-      projectId: project.id,
-      module: '指标分解',
-      operationType: '批量修改',
-      objectType: '科研指标',
-      objectName: `${selectedTopic?.name} ${selectedNode?.name}`,
-      description: `批量更新指标：${selectedTopic?.name} / ${selectedNode?.name}`,
-      operator: '当前用户',
-      operatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-    });
-
     setMatrixEdits({});
     message.success('批量保存成功');
   };
 
-  // ---- Node table columns (Tab 2) ----
   const nodeColumns = [
     { title: '排序', dataIndex: 'sortOrder', key: 'sortOrder', width: 70 },
     { title: '节点名称', dataIndex: 'name', key: 'name' },
@@ -419,23 +317,6 @@ export function IndicatorConfigPage() {
     },
   ];
 
-  // ---- Topic card summary helpers ----
-  const getTopicIPSummary = (topicId: string) => {
-    const topic = topicMap[topicId];
-    if (!topic?.topicOverallRequirements) return '未配置';
-    const reqs = topic.topicOverallRequirements;
-    const total = Object.values(reqs).reduce((sum: number, v: number) => sum + v, 0);
-    return total > 0 ? `${total} 项` : '未配置';
-  };
-
-  const getTopicPowerGridSummary = (topicId: string) => {
-    const reqs = topicPowerGridRequirements.filter((r) => r.topicId === topicId);
-    if (reqs.length === 0) return '未配置';
-    const total = reqs.reduce((sum, r) => sum + r.requiredCount, 0);
-    return `${reqs.length} 类 / ${total} 项`;
-  };
-
-  // ---- Tab contents ----
   const renderTopicConfigTab = () => (
     <div>
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -454,19 +335,13 @@ export function IndicatorConfigPage() {
                   </Space>
                   <Space size="large" wrap>
                     <Text type="secondary">
-                      牵头单位：{unitMap[topic.leadingUnitId] || topic.leadingUnitId || '-'}
+                      牵头单位：{topic.leadingUnitId || '-'}
                     </Text>
                     <Text type="secondary">
                       参与单位：{topic.participatingUnitIds.length} 个
                     </Text>
                     <Text type="secondary">
-                      知识产权：{getTopicIPSummary(topic.id)}
-                    </Text>
-                    <Text type="secondary">
                       国内期刊要求：{topic.domesticJournalRequiredCount || 0} 篇
-                    </Text>
-                    <Text type="secondary">
-                      电网主导：{getTopicPowerGridSummary(topic.id)}
                     </Text>
                   </Space>
                 </Space>
@@ -501,7 +376,7 @@ export function IndicatorConfigPage() {
               />
             </Card>
 
-            {/* Section 2: 参与单位 */}
+            {/* Section 2: 参与单位 (Select dropdowns) */}
             <Card title="参与单位" size="small">
               <Section2Units
                 topic={editingTopic}
@@ -510,7 +385,7 @@ export function IndicatorConfigPage() {
             </Card>
 
             {/* Section 3: 课题总体成果要求 */}
-            <Card title="课题总体成果要求" size="small">
+            <Card title="课题成果要求" size="small">
               <Section3TopicReq
                 topic={editingTopic}
                 onSave={(values) => handleSaveTopicReq(values, editingTopic)}
@@ -566,7 +441,6 @@ export function IndicatorConfigPage() {
           tab={<span><TableOutlined /> 指标分解</span>}
           key="indicator-decompose"
         >
-          {/* Topic selector */}
           <Card size="small" style={{ marginBottom: 16 }}>
             <Space>
               <Text strong>选择课题：</Text>
@@ -594,7 +468,7 @@ export function IndicatorConfigPage() {
                     onChange={(e) => {
                       setSelectedNodeId(e.target.value);
                       setMatrixEdits({});
-                        }}
+                    }}
                   >
                     {sortedNodes.map((n) => (
                       <Radio.Button key={n.id} value={n.id}>
@@ -607,26 +481,23 @@ export function IndicatorConfigPage() {
             </Space>
           </Card>
 
-          {/* Topic info banner - READ ONLY */}
           {selectedTopic && (
             <Card size="small" style={{ marginBottom: 16 }}>
               <Space direction="vertical" size={4}>
                 <Text strong>{selectedTopic.code} {selectedTopic.name}</Text>
                 <Space size="large" wrap>
-                  <Text type="secondary">牵头单位：{unitMap[selectedTopic.leadingUnitId] || selectedTopic.leadingUnitId || '-'}</Text>
-                  <Text type="secondary">参与单位：{selectedTopic.participatingUnitIds.map((uid) => unitMap[uid] || uid).join('、') || '-'}</Text>
+                  <Text type="secondary">牵头单位：{selectedTopic.leadingUnitId || '-'}</Text>
+                  <Text type="secondary">参与单位：{selectedTopic.participatingUnitIds.join('、') || '-'}</Text>
                   <Text type="secondary">负责人：{selectedTopic.principalName || '-'}</Text>
                   <Text type="secondary">联系人：{selectedTopic.contactName || '-'}（{selectedTopic.contactPhone || ''}{selectedTopic.contactEmail ? ` / ${selectedTopic.contactEmail}` : ''}）</Text>
                 </Space>
                 <Space size="large">
-                  <Text type="secondary">知识产权要求：{getTopicIPSummary(selectedTopic.id)}</Text>
                   <Text type="secondary">国内期刊要求：{selectedTopic.domesticJournalRequiredCount || 0} 篇</Text>
                 </Space>
               </Space>
             </Card>
           )}
 
-          {/* TopicNodeTarget row + Indicator matrix */}
           {selectedNodeId && selectedTopic && (
             <Card
               title="指标分解矩阵"
@@ -696,9 +567,7 @@ export function IndicatorConfigPage() {
                         <Text strong type="warning">课题总指标</Text>
                       </Table.Summary.Cell>
                       {ACHIEVEMENT_TYPES.map((type) => {
-                        const currentTarget = currentNodeTargets.find((t) => t.achievementType === type);
-                        const overallReq = selectedTopic?.topicOverallRequirements?.[type] ?? 0;
-                        const val = currentTarget?.targetQuantity ?? overallReq;
+                        const val = selectedTopic?.topicOverallRequirements?.[type] ?? 0;
                         return (
                           <Table.Summary.Cell key={type} index={ACHIEVEMENT_TYPES.indexOf(type) + 1}>
                             <Text strong>{val}</Text>
@@ -711,9 +580,7 @@ export function IndicatorConfigPage() {
                         <Text type="danger">差值（缺口）</Text>
                       </Table.Summary.Cell>
                       {ACHIEVEMENT_TYPES.map((type) => {
-                        const currentTarget = currentNodeTargets.find((t) => t.achievementType === type);
-                        const overallReq = selectedTopic?.topicOverallRequirements?.[type] ?? 0;
-                        const targetVal = currentTarget?.targetQuantity ?? overallReq;
+                        const targetVal = selectedTopic?.topicOverallRequirements?.[type] ?? 0;
                         const unitTotal = matrixData.totals[type] || 0;
                         const gap = targetVal - unitTotal;
                         return (
@@ -730,9 +597,7 @@ export function IndicatorConfigPage() {
               />
             </Card>
           )}
-
         </Tabs.TabPane>
-
       </Tabs>
 
       {/* Node Form Modal */}
@@ -860,8 +725,11 @@ function Section2Units({ topic, onSave }: { topic: Topic; onSave: (values: any) 
   );
 }
 
+const POWER_GRID_TYPES: Array<'学术论文' | '发明专利' | '软件著作权' | '标准规范'> = ['学术论文', '发明专利', '软件著作权', '标准规范'];
+
 function Section3TopicReq({ topic, onSave }: { topic: Topic; onSave: (values: any) => void }) {
   const [form] = Form.useForm();
+  const reqs = topic.topicOverallRequirements || {};
 
   const handleSubmit = () => {
     form.validateFields().then((values) => {
@@ -869,14 +737,12 @@ function Section3TopicReq({ topic, onSave }: { topic: Topic; onSave: (values: an
     });
   };
 
-  const overallReqs = topic.topicOverallRequirements || {};
-
   return (
     <Form
       form={form}
       layout="vertical"
       initialValues={{
-        ...Object.fromEntries(ACHIEVEMENT_TYPES.map((t) => [`req_${t}`, overallReqs[t] ?? 0])),
+        ...Object.fromEntries(ACHIEVEMENT_TYPES.map((t) => [`req_${t}`, reqs[t] ?? 0])),
         domesticJournalRequiredCount: topic.domesticJournalRequiredCount || 0,
       }}
     >
@@ -900,41 +766,19 @@ function Section4PowerGrid({ powerGridReqs, onSave }: { topic: Topic; powerGridR
   const handleSubmit = () => {
     form.validateFields().then(() => {
       const values = form.getFieldsValue();
-      const result = POWER_GRID_TYPES.map((type) => ({
-        achievementType: type,
-        requiredCount: values[`pg_count_${type}`] ?? 0,
-      }));
+      const result = POWER_GRID_TYPES.map((type) => ({ achievementType: type, requiredCount: values[`pg_${type}`] ?? 0 }));
       onSave(result);
     });
   };
 
   return (
-    <Form
-      form={form}
-      layout="vertical"
-      initialValues={(() => {
-        const obj: Record<string, any> = {};
-        POWER_GRID_TYPES.forEach((type) => {
-          obj[`pg_count_${type}`] = reqMap[type]?.requiredCount ?? 0;
-        });
-        return obj;
-      })()}
-    >
-      <Table
-        rowKey="type"
-        pagination={false}
-        dataSource={POWER_GRID_TYPES.map((type) => ({ type, label: type }))}
+    <Form form={form} layout="vertical" initialValues={(() => { const obj: Record<string, any> = {}; POWER_GRID_TYPES.forEach((t) => { obj[`pg_${t}`] = reqMap[t]?.requiredCount ?? 0; }); return obj; })()}>
+      <Table rowKey="type" pagination={false} dataSource={POWER_GRID_TYPES.map((type) => ({ type, label: type }))}
         columns={[
           { title: '成果类型', dataIndex: 'label', key: 'label', width: 120 },
-          {
-            title: '电网公司主导要求',
-            key: 'count',
-            render: (_: any, record: { type: string }) => (
-              <Form.Item name={`pg_count_${record.type}`} style={{ margin: 0 }}>
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            ),
-          },
+          { title: '电网公司主导要求', key: 'count', render: (_: any, record: { type: string }) => (
+            <Form.Item name={`pg_${record.type}`} style={{ margin: 0 }}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
+          )},
         ]}
       />
       <Button type="primary" onClick={handleSubmit} style={{ marginTop: 16 }}>保存电网公司成果要求</Button>

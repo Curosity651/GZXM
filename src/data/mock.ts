@@ -1,7 +1,7 @@
 import type {
   Achievement, AchievementMaterial, ArchiveCategory, ArchiveMaterial, ArchiveRequirement,
-  IndicatorConfig, OperationRecord, Project, ProjectUnit,
-  TimeNode, Topic, TopicIPRequirement, TopicPowerGridRequirement, TopicNodeTarget, WarningRule,
+  IndicatorConfig, Project, ProjectUnit,
+  TimeNode, Topic, WarningRule, User,
 } from '../types';
 
 export const MOCK_PROJECT: Project = { id: 'p1', name: '国家科技重大专项示范', code: 'GZ-2025-001', startDate: '2025-01-01', endDate: '2028-12-31' };
@@ -33,45 +33,24 @@ export const MOCK_TIME_NODES: TimeNode[] = [
 ];
 
 export const MOCK_INDICATORS: IndicatorConfig[] = [
-  // 课题1 清华大学 — 论文（中期达标，结项有缺口）
   { id: 'ind-1', projectId: 'p1', topicId: 't1', unitId: 'u-tsinghua', achievementType: '学术论文', nodeId: 'node-3', plannedQuantity: 2, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
   { id: 'ind-2', projectId: 'p1', topicId: 't1', unitId: 'u-tsinghua', achievementType: '学术论文', nodeId: 'node-5', plannedQuantity: 5, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  // 课题1 清华大学 — 专利（中期有缺口）
   { id: 'ind-3', projectId: 'p1', topicId: 't1', unitId: 'u-tsinghua', achievementType: '发明专利', nodeId: 'node-3', plannedQuantity: 3, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  // 课题1 北京大学 — 论文（有缺口）
   { id: 'ind-4', projectId: 'p1', topicId: 't1', unitId: 'u-pku', achievementType: '学术论文', nodeId: 'node-3', plannedQuantity: 2, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  // 课题3 中科院计算所 — 软著（中期达标）
   { id: 'ind-5', projectId: 'p1', topicId: 't3', unitId: 'u-ict', achievementType: '软件著作权', nodeId: 'node-3', plannedQuantity: 1, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
   { id: 'ind-6', projectId: 'p1', topicId: 't3', unitId: 'u-ict', achievementType: '软件著作权', nodeId: 'node-5', plannedQuantity: 3, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  // 课题4 浙江大学 — 论文（达标）
   { id: 'ind-7', projectId: 'p1', topicId: 't4', unitId: 'u-zju', achievementType: '学术论文', nodeId: 'node-3', plannedQuantity: 1, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  // 课题5 华中科技大学 — 标准（达标）
   { id: 'ind-8', projectId: 'p1', topicId: 't5', unitId: 'u-hust', achievementType: '标准规范', nodeId: 'node-3', plannedQuantity: 1, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
 ];
 
-export const MOCK_TOPIC_IP_REQUIREMENTS: TopicIPRequirement[] = [
-  { topicId: 't1', requiredCount: 5, includedTypes: ['发明专利', '软件著作权'] },
-  { topicId: 't2', requiredCount: 3, includedTypes: ['发明专利', '软件著作权'] },
-  { topicId: 't3', requiredCount: 4, includedTypes: ['发明专利', '软件著作权'] },
-  { topicId: 't4', requiredCount: 3, includedTypes: ['发明专利', '软件著作权'] },
-  { topicId: 't5', requiredCount: 2, includedTypes: ['发明专利', '软件著作权'] },
-];
-
-export const MOCK_TOPIC_POWER_GRID_REQUIREMENTS: TopicPowerGridRequirement[] = [
-  { id: 'pgr-1', projectId: 'p1', topicId: 't1', achievementType: '学术论文', requiredCount: 1 },
-  { id: 'pgr-2', projectId: 'p1', topicId: 't1', achievementType: '发明专利', requiredCount: 2 },
+export const MOCK_TOPIC_POWER_GRID_REQUIREMENTS: import('../types').TopicPowerGridRequirement[] = [
+  { id: 'pgr-1', projectId: 'p1', topicId: 't1', achievementType: '学术论文', requiredCount: 2 },
+  { id: 'pgr-2', projectId: 'p1', topicId: 't1', achievementType: '发明专利', requiredCount: 3 },
   { id: 'pgr-3', projectId: 'p1', topicId: 't1', achievementType: '软件著作权', requiredCount: 1 },
-  { id: 'pgr-4', projectId: 'p1', topicId: 't2', achievementType: '学术论文', requiredCount: 1 },
-  { id: 'pgr-5', projectId: 'p1', topicId: 't3', achievementType: '发明专利', requiredCount: 1 },
+  { id: 'pgr-4', projectId: 'p1', topicId: 't2', achievementType: '发明专利', requiredCount: 1 },
+  { id: 'pgr-5', projectId: 'p1', topicId: 't3', achievementType: '发明专利', requiredCount: 2 },
   { id: 'pgr-6', projectId: 'p1', topicId: 't4', achievementType: '学术论文', requiredCount: 1 },
   { id: 'pgr-7', projectId: 'p1', topicId: 't4', achievementType: '发明专利', requiredCount: 1 },
-];
-
-export const MOCK_TOPIC_NODE_TARGETS: TopicNodeTarget[] = [
-  { id: 'tnt-1', projectId: 'p1', topicId: 't1', nodeId: 'node-3', achievementType: '学术论文', targetQuantity: 4 },
-  { id: 'tnt-2', projectId: 'p1', topicId: 't1', nodeId: 'node-5', achievementType: '学术论文', targetQuantity: 12 },
-  { id: 'tnt-3', projectId: 'p1', topicId: 't1', nodeId: 'node-3', achievementType: '发明专利', targetQuantity: 6 },
-  { id: 'tnt-4', projectId: 'p1', topicId: 't1', nodeId: 'node-3', achievementType: '软件著作权', targetQuantity: 2 },
 ];
 
 export const MOCK_WARNING_RULES: WarningRule[] = [
@@ -122,11 +101,11 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     indicatorId: 'ind-1', nodeId: 'node-3',
     title: '面向国重项目的架构设计方法研究', responsiblePerson: '张三', otherContributors: ['李四', '王五'],
     progressStatus: '', plannedCompletionDate: '2027-03-15', recognizedCompletionDate: '2025-06-01',
-    paperRecognitionType: '正式刊出',
+    paperStatus: '已正式刊出',
     status: '审批通过', countsToIndicator: true,
     createdAt: '2025-03-01', updatedAt: '2025-06-20', submittedAt: '2025-06-10', remarks: '',
     approvalOpinion: '符合要求', approvedAt: '2025-06-20', approver: '管理员A',
-    isRepresentative: true, isChineseJournal: true, chineseJournalReason: '《中国科学》',
+    isChineseJournal: true,
     paperType: 'SCI', journalName: '中国科学', cnNumber: '11-5844/N', issn: '1674-7216', doi: '10.1360/SSP-2025-0001',
     firstAuthor: '张三', correspondingAuthor: '李四', allAuthors: '张三, 李四, 王五',
     signingUnitList: '清华大学', firstSigningUnit: '清华大学', firstAuthorUnit: '清华大学',
@@ -134,29 +113,29 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     journalYearVolumePage: '2025年 第1卷 第1期 1-10页', projectLabeling: '已标注',
     materials: createMaterials('ach-1', [{ name: '正式刊出证明', status: '审核通过', materialType: '正式刊出证明' }]),
   },
-  // 课题1 北大 论文 — 审批中（未计入，产生数量缺口预警）
+  // 课题1 北大 论文 — 审批中
   {
     id: 'ach-2', projectId: 'p1', topicId: 't1', unitId: 'u-pku', achievementType: '学术论文',
     indicatorId: 'ind-4', nodeId: 'node-3',
     title: '国重项目数据治理关键技术', responsiblePerson: '赵六',
     progressStatus: '', plannedCompletionDate: '2027-05-01', recognizedCompletionDate: '2025-05-10',
-    paperRecognitionType: '录用',
+    paperStatus: '已录用',
     status: '审批中', countsToIndicator: false,
     createdAt: '2025-04-10', updatedAt: '2025-06-18', submittedAt: '2025-06-18', remarks: '',
-    isRepresentative: false, isChineseJournal: false,
+    isChineseJournal: false,
     paperType: 'EI', journalName: '计算机研究与发展', cnNumber: '11-1777/TP', issn: '1000-1239',
     firstAuthor: '赵六', allAuthors: '赵六, 孙七',
     signingUnitList: '北京大学', firstSigningUnit: '北京大学', firstAuthorUnit: '北京大学',
     submissionDate: '2025-02-20', acceptanceDate: '2025-05-10', projectLabeling: '已标注',
     materials: createMaterials('ach-2', [{ name: '论文录用通知', status: '待审核', materialType: '论文录用通知' }]),
   },
-  // 课题1 清华 专利 — 审批通过（1项计入中期，距要求差2项）
+  // 课题1 清华 专利 — 审批通过
   {
     id: 'ach-3', projectId: 'p1', topicId: 't1', unitId: 'u-tsinghua', achievementType: '发明专利',
     indicatorId: 'ind-3', nodeId: 'node-3',
     title: '一种国重项目数据处理方法', responsiblePerson: '张三',
     progressStatus: '', plannedCompletionDate: '2027-03-01', recognizedCompletionDate: '2025-04-10',
-    patentRecognitionType: '授权',
+    patentStatus: '已授权',
     status: '审批通过', countsToIndicator: true,
     createdAt: '2025-02-10', updatedAt: '2025-04-20', submittedAt: '2025-04-10', remarks: '',
     approvalOpinion: '已授权', approvedAt: '2025-04-20', approver: '管理员A',
@@ -168,13 +147,12 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     patentHolderList: '清华大学', legalStatus: '授权',
     materials: createMaterials('ach-3', [{ name: '发明专利授权证明文件', status: '审核通过', materialType: '发明专利授权证明文件' }]),
   },
-  // 课题3 计算所 软著 — 审批通过（1项计入中期，达标）
+  // 课题3 计算所 软著 — 审批通过
   {
     id: 'ach-4', projectId: 'p1', topicId: 't3', unitId: 'u-ict', achievementType: '软件著作权',
     indicatorId: 'ind-5', nodeId: 'node-3',
     title: '国重项目数据管理平台V1.0', responsiblePerson: '王五',
     progressStatus: '', plannedCompletionDate: '2027-05-01', recognizedCompletionDate: '2025-05-01',
-    softwareDevelopmentMode: '独立开发',
     status: '审批通过', countsToIndicator: true,
     createdAt: '2025-02-20', updatedAt: '2025-05-15', submittedAt: '2025-05-10', remarks: '',
     approvalOpinion: '已取得证书', approvedAt: '2025-05-15', approver: '管理员A',
@@ -186,7 +164,7 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     completionDate: '2025-01-31', registrationNumber: '2025SR0000001', certificateDate: '2025-05-01',
     materials: createMaterials('ach-4', [{ name: '软件著作权证书', status: '审核通过', materialType: '软件著作权证书' }]),
   },
-  // 课题5 华中大 标准 — 审批通过（1项计入中期，达标）
+  // 课题5 华中大 标准 — 审批通过
   {
     id: 'ach-5', projectId: 'p1', topicId: 't5', unitId: 'u-hust', achievementType: '标准规范',
     indicatorId: 'ind-8', nodeId: 'node-3',
@@ -203,6 +181,13 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     draftSubmissionDate: '2025-04-15', draftCommitDate: '2025-05-30',
     materials: createMaterials('ach-5', [{ name: '标准送审稿', status: '审核通过', materialType: '标准送审稿' }]),
   },
+];
+
+export const MOCK_USERS: User[] = [
+  { id: 'user-admin', username: 'admin', password: 'admin123', name: '系统管理员', unitId: 'u-sgcc', phone: '13800000001', email: 'admin@sgcc.com.cn', role: '系统管理员', enabled: true, createdAt: '2025-01-01', lastLoginAt: '2025-06-01' },
+  { id: 'user-pm', username: 'pm', password: 'pm123', name: '项目管理员', unitId: 'u-sgcc', phone: '13800000002', email: 'pm@sgcc.com.cn', role: '项目管理人员', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic', username: 'topic', password: 'topic123', name: '课题用户', unitId: 'u-tsinghua', phone: '13800000003', email: 'topic@tsinghua.edu.cn', role: '课题用户', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-reviewer', username: 'reviewer', password: 'reviewer123', name: '审批人员', unitId: 'u-sgcc', phone: '13800000004', email: 'reviewer@sgcc.com.cn', role: '成果审批人员', enabled: true, createdAt: '2025-01-01' },
 ];
 
 export const MOCK_ARCHIVE_CATEGORIES: ArchiveCategory[] = [
@@ -225,9 +210,4 @@ export const MOCK_ARCHIVE_MATERIALS: ArchiveMaterial[] = [
   { id: 'am-2', projectId: 'p1', categoryId: 'ac-3', requirementId: 'ar-4', name: '发明专利授权证书', fileName: 'patent_ach-4.pdf', sourceAchievementId: 'ach-4', uploader: '张三', uploadedAt: '2025-04-21', remarks: '', versions: [{ id: 'av-2-1', archiveMaterialId: 'am-2', version: 1, fileName: 'patent_ach-4.pdf', fileUrl: 'mock://files/patent_ach-4.pdf', uploadedAt: '2025-04-21', uploader: '张三' }] },
   { id: 'am-3', projectId: 'p1', categoryId: 'ac-4', requirementId: 'ar-5', name: '中期检查汇报PPT', fileName: 'midterm_report.pptx', uploader: '管理员A', uploadedAt: '2025-06-25', remarks: '', versions: [{ id: 'av-3-1', archiveMaterialId: 'am-3', version: 1, fileName: 'midterm_report.pptx', fileUrl: 'mock://files/midterm_report.pptx', uploadedAt: '2025-06-25', uploader: '管理员A' }] },
   { id: 'am-4', projectId: 'p1', categoryId: 'ac-1', requirementId: 'ar-1', name: '项目任务书', fileName: 'task_book.pdf', uploader: '管理员A', uploadedAt: '2025-01-05', remarks: '', versions: [{ id: 'av-4-1', archiveMaterialId: 'am-4', version: 1, fileName: 'task_book.pdf', fileUrl: 'mock://files/task_book.pdf', uploadedAt: '2025-01-05', uploader: '管理员A' }] },
-];
-
-export const MOCK_OPERATION_RECORDS: OperationRecord[] = [
-  { id: 'or-1', projectId: 'p1', module: '指标分解', operationType: '新增', objectType: '科研指标', objectId: 'ind-1', objectName: '课题1 清华大学 学术论文 中期检查', description: '初始导入指标', operator: '管理员A', operatedAt: '2025-01-01 09:00:00' },
-  { id: 'or-2', projectId: 'p1', module: '时间节点配置', operationType: '新增', objectType: '时间节点', objectId: 'node-1', objectName: '第一年度', description: '新增第一年度节点', operator: '管理员A', operatedAt: '2025-01-01 09:00:00' },
 ];

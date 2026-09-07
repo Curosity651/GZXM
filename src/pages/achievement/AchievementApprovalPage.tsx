@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  Button, Card, Descriptions, Form, Input, Modal, Radio, Select,
-  Space, Switch, Table, Tag, Typography,
+  Button, Card, Descriptions, Form, Input, Modal, Radio,
+  Select, Space, Table, Tag, Typography, message,
 } from 'antd';
 import {
   CheckCircleFilled, CheckOutlined, CloseCircleFilled, EyeOutlined,
@@ -21,7 +21,7 @@ const { Text } = Typography;
 export function AchievementApprovalPage() {
   const {
     topics, units, nodes, indicators, achievements,
-    approveAchievement, rejectAchievement, returnAchievement,
+    approveAchievement, rejectAchievement, returnAchievement, updateAchievement,
   } = useAppStore();
 
   const [form] = Form.useForm();
@@ -55,32 +55,58 @@ export function AchievementApprovalPage() {
     setValidation(val);
     form.setFieldsValue({
       result: 'pass',
-      countsToIndicator: val.passed,
       approvalOpinion: '',
-      isRepresentative: achievement.isRepresentative,
-      isChineseJournal: achievement.isChineseJournal,
-      chineseJournalReason: achievement.chineseJournalReason,
     });
     setVisible(true);
   };
 
+  const handleMaterialApprove = (materialId: string, achievementId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const ach = achievements.find((a) => a.id === achievementId);
+    if (!ach) return;
+    const updatedMaterials = ach.materials.map((m) =>
+      m.id === materialId ? { ...m, status: '审核通过' as const, reviewedAt: today } : m
+    );
+    updateAchievement(achievementId, { materials: updatedMaterials } as any);
+    setEditing((prev) => prev ? { ...prev, materials: updatedMaterials } : null);
+    message.success('材料审核通过');
+  };
+
+  const handleMaterialReturn = (materialId: string, achievementId: string, reason: string) => {
+    if (!reason) {
+      message.warning('退回材料需要填写原因');
+      return;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    const ach = achievements.find((a) => a.id === achievementId);
+    if (!ach) return;
+    const updatedMaterials = ach.materials.map((m) =>
+      m.id === materialId ? { ...m, status: '退回修改' as const, reviewedAt: today, reviewOpinion: reason } : m
+    );
+    updateAchievement(achievementId, { materials: updatedMaterials } as any);
+    setEditing((prev) => prev ? { ...prev, materials: updatedMaterials } : null);
+    message.success('材料已退回修改');
+  };
+
   const handleSubmit = (values: any) => {
     if (!editing) return;
+
     if (values.result === 'pass') {
+      // Auto-set countsToIndicator: pass->true
       const payload: Partial<Achievement> = {
-        countsToIndicator: values.countsToIndicator,
+        countsToIndicator: true,
         approvalOpinion: values.approvalOpinion,
       };
-      if (editing.achievementType === '学术论文') {
-        payload.isRepresentative = values.isRepresentative;
-        payload.isChineseJournal = values.isChineseJournal;
-        payload.chineseJournalReason = values.chineseJournalReason;
-      }
       approveAchievement(editing.id, payload, '当前审批人');
+      message.success('审批通过');
     } else if (values.result === 'reject') {
+      // Auto-set countsToIndicator: reject->false
       rejectAchievement(editing.id, values.approvalOpinion || '审批不通过', '当前审批人');
+      message.success('已标记为审批不通过');
     } else if (values.result === 'return') {
+      // Auto-set countsToIndicator: return->false
       returnAchievement(editing.id, values.approvalOpinion || '退回修改', '当前审批人');
+      message.success('已退回修改');
     }
     setVisible(false);
     setEditing(null);
@@ -136,7 +162,6 @@ export function AchievementApprovalPage() {
     },
   ];
 
-  // Detail modal rendering helpers
   const renderBasicDescriptions = (a: Achievement) => (
     <Descriptions title="基本信息" bordered column={2} size="small">
       <Descriptions.Item label="所属课题">{topicMap[a.topicId]?.name || a.topicId}</Descriptions.Item>
@@ -156,7 +181,7 @@ export function AchievementApprovalPage() {
     if (a.achievementType === '学术论文') {
       return (
         <Descriptions title="论文信息" bordered column={2} size="small">
-          <Descriptions.Item label="认定类型">{a.paperRecognitionType || '-'}</Descriptions.Item>
+          <Descriptions.Item label="论文状态">{a.paperStatus || '-'}</Descriptions.Item>
           <Descriptions.Item label="论文类别">{a.paperType || '-'}</Descriptions.Item>
           <Descriptions.Item label="期刊名称">{a.journalName || '-'}</Descriptions.Item>
           <Descriptions.Item label="署名单位列表">{a.signingUnitList || '-'}</Descriptions.Item>
@@ -167,7 +192,6 @@ export function AchievementApprovalPage() {
           <Descriptions.Item label="录用日期">{a.acceptanceDate || '-'}</Descriptions.Item>
           <Descriptions.Item label="正式刊出日期">{a.publicationDate || '-'}</Descriptions.Item>
           <Descriptions.Item label="DOI">{a.doi || '-'}</Descriptions.Item>
-          <Descriptions.Item label="是否代表性论文">{a.isRepresentative ? '是' : '否'}</Descriptions.Item>
           <Descriptions.Item label="是否国内期刊">{a.isChineseJournal ? '是' : '否'}</Descriptions.Item>
         </Descriptions>
       );
@@ -175,7 +199,7 @@ export function AchievementApprovalPage() {
     if (a.achievementType === '发明专利') {
       return (
         <Descriptions title="专利信息" bordered column={2} size="small">
-          <Descriptions.Item label="认定类型">{a.patentRecognitionType || '-'}</Descriptions.Item>
+          <Descriptions.Item label="专利状态">{a.patentStatus || '-'}</Descriptions.Item>
           <Descriptions.Item label="专利范围">{a.patentScope || '-'}</Descriptions.Item>
           <Descriptions.Item label="申请人列表">{a.applicantList || '-'}</Descriptions.Item>
           <Descriptions.Item label="第一申请人">{a.firstApplicant || '-'}</Descriptions.Item>
@@ -192,7 +216,6 @@ export function AchievementApprovalPage() {
     if (a.achievementType === '软件著作权') {
       return (
         <Descriptions title="软著信息" bordered column={2} size="small">
-          <Descriptions.Item label="开发方式">{a.softwareDevelopmentMode || '-'}</Descriptions.Item>
           <Descriptions.Item label="软件全称">{a.softwareFullName || '-'}</Descriptions.Item>
           <Descriptions.Item label="版本号">{a.version || '-'}</Descriptions.Item>
           <Descriptions.Item label="第一著作权人">{a.firstCopyrightOwner || '-'}</Descriptions.Item>
@@ -229,7 +252,6 @@ export function AchievementApprovalPage() {
 
   return (
     <Card title="成果审批">
-      {/* Filters */}
       <Space style={{ marginBottom: 16 }} wrap>
         <Select placeholder="选择课题" allowClear style={{ width: 200 }}
           onChange={(v) => setFilter({ ...filter, topicId: v })}>
@@ -259,7 +281,6 @@ export function AchievementApprovalPage() {
       >
         {editing && (
           <>
-            {/* Full achievement info */}
             {renderBasicDescriptions(editing)}
             <div style={{ margin: '12px 0' }}>{renderTypeSpecificDescriptions(editing)}</div>
 
@@ -294,26 +315,43 @@ export function AchievementApprovalPage() {
               </Card>
             )}
 
-            {/* Materials display */}
+            {/* Materials review section with approve/return buttons */}
             {editing.materials && editing.materials.length > 0 && (
-              <Card size="small" title="佐证材料" style={{ marginBottom: 16 }}>
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  {editing.materials.map((m) => (
-                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text>{m.materialType || m.name}</Text>
-                      <Space>
-                        {m.fileName && <Text type="secondary" style={{ fontSize: 12 }}>{m.fileName}</Text>}
-                        {m.fileId && (
-                          <Button size="small" type="link" onClick={() => mockFileService.preview(m.fileId)}>预览</Button>
-                        )}
-                        {m.fileUrl && (
-                          <Button size="small" type="link" href={m.fileUrl} target="_blank">下载</Button>
-                        )}
-                        <Tag color={matColor[m.status]}>{m.status}</Tag>
-                      </Space>
+              <Card size="small" title="佐证材料审核" style={{ marginBottom: 16 }}>
+                {editing.materials.map((m) => (
+                  <div key={m.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    marginBottom: 8, padding: 8, border: '1px solid #f0f0f0', borderRadius: 4,
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <Text strong>{m.materialType || m.name}</Text>
+                      {m.fileName && <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>{m.fileName}</Text>}
+                      <Tag color={matColor[m.status]} style={{ marginLeft: 8 }}>{m.status}</Tag>
+                      {m.reviewOpinion && <Text type="danger" style={{ fontSize: 12, display: 'block' }}>{m.reviewOpinion}</Text>}
                     </div>
-                  ))}
-                </Space>
+                    <Space>
+                      {m.fileId && (
+                        <>
+                          <Button size="small" type="link" onClick={() => mockFileService.preview(m.fileId)}>预览</Button>
+                          <Button size="small" type="link" onClick={() => mockFileService.download(m.fileId)}>下载</Button>
+                        </>
+                      )}
+                      {m.status === '待审核' && (
+                        <>
+                          <Button size="small" type="primary" onClick={() => handleMaterialApprove(m.id, editing.id)}>
+                            通过
+                          </Button>
+                          <Button size="small" danger onClick={() => {
+                            const reason = window.prompt('请输入退回原因：');
+                            if (reason) handleMaterialReturn(m.id, editing.id, reason);
+                          }}>
+                            退回
+                          </Button>
+                        </>
+                      )}
+                    </Space>
+                  </div>
+                ))}
               </Card>
             )}
           </>
@@ -329,20 +367,17 @@ export function AchievementApprovalPage() {
             </Radio.Group>
           </Form.Item>
 
-          <Form.Item label="是否计入指标" name="countsToIndicator" valuePropName="checked"
-            extra={!validation?.passed ? '系统校验未全部通过，不建议计入指标' : undefined}>
-            <Switch disabled={!validation?.passed} />
-          </Form.Item>
-
-          {editing?.achievementType === '学术论文' && (
-            <>
-              <Form.Item label="是否代表性论文" name="isRepresentative" valuePropName="checked"><Switch /></Form.Item>
-              <Form.Item label="是否国内期刊" name="isChineseJournal" valuePropName="checked"><Switch /></Form.Item>
-              <Form.Item label="国内期刊判定说明" name="chineseJournalReason"><TextArea rows={2} /></Form.Item>
-            </>
+          {validation && (
+            <div style={{ marginBottom: 16 }}>
+              <Text type="secondary">
+                审批通过后将自动计入指标；审批不通过或退回修改将不计入指标。
+              </Text>
+            </div>
           )}
 
-          <Form.Item label="审批意见" name="approvalOpinion"><TextArea rows={3} /></Form.Item>
+          <Form.Item label="审批意见" name="approvalOpinion">
+            <TextArea rows={3} placeholder="请输入审批意见（不通过/退回时建议填写原因）" />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -359,7 +394,6 @@ export function AchievementApprovalPage() {
             {renderBasicDescriptions(detailAchievement)}
             <div>{renderTypeSpecificDescriptions(detailAchievement)}</div>
 
-            {/* Approval history */}
             <Descriptions title="审批记录" bordered column={2} size="small">
               <Descriptions.Item label="审批人">{detailAchievement.approver || '-'}</Descriptions.Item>
               <Descriptions.Item label="审批时间">{detailAchievement.approvedAt || '-'}</Descriptions.Item>

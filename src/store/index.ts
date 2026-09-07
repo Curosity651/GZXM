@@ -2,63 +2,58 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   Achievement, ArchiveCategory, ArchiveMaterial, ArchiveRequirement,
-  IndicatorConfig, OperationRecord, Project,
-  ProjectUnit, TimeNode, Topic, TopicIPRequirement,
-  TopicPowerGridRequirement, TopicNodeTarget, WarningRule,
+  IndicatorConfig, Project,
+  ProjectUnit, TimeNode, Topic, TopicPowerGridRequirement, WarningRule, User, UserRole,
 } from '../types';
 import {
   MOCK_ACHIEVEMENTS, MOCK_ARCHIVE_CATEGORIES, MOCK_ARCHIVE_MATERIALS, MOCK_ARCHIVE_REQUIREMENTS,
-  MOCK_INDICATORS, MOCK_OPERATION_RECORDS,
+  MOCK_INDICATORS,
   MOCK_PROJECT, MOCK_TIME_NODES, MOCK_TOPICS, MOCK_UNITS, MOCK_WARNING_RULES,
-  MOCK_TOPIC_IP_REQUIREMENTS, MOCK_TOPIC_POWER_GRID_REQUIREMENTS, MOCK_TOPIC_NODE_TARGETS,
+  MOCK_USERS, MOCK_TOPIC_POWER_GRID_REQUIREMENTS,
 } from '../data/mock';
 
-interface AppState {
+export interface AppState {
   project: Project;
   units: ProjectUnit[];
   topics: Topic[];
   nodes: TimeNode[];
   indicators: IndicatorConfig[];
-  topicIPRequirements: TopicIPRequirement[];
-  topicPowerGridRequirements: TopicPowerGridRequirement[];
-  topicNodeTargets: TopicNodeTarget[];
   warningRules: WarningRule[];
   achievements: Achievement[];
   archiveCategories: ArchiveCategory[];
   archiveMaterials: ArchiveMaterial[];
   archiveRequirements: ArchiveRequirement[];
-  operationRecords: OperationRecord[];
+  topicPowerGridRequirements: TopicPowerGridRequirement[];
 
+  // Auth
+  users: User[];
+  currentUser: User | null;
+
+  // Unit CRUD
   addUnit: (unit: ProjectUnit) => void;
   updateUnit: (id: string, updates: Partial<ProjectUnit>) => void;
   removeUnit: (id: string) => void;
 
+  // Topic CRUD
   addTopic: (topic: Topic) => void;
   updateTopic: (id: string, updates: Partial<Topic>) => void;
   removeTopic: (id: string) => void;
 
+  // Node CRUD
   addNode: (node: TimeNode) => void;
   updateNode: (id: string, updates: Partial<TimeNode>) => void;
   removeNode: (id: string) => void;
 
+  // Indicator CRUD
   addIndicator: (indicator: IndicatorConfig) => void;
   updateIndicator: (id: string, updates: Partial<IndicatorConfig>) => void;
   removeIndicator: (id: string) => void;
   batchUpdateIndicators: (updates: { id: string; plannedQuantity: number }[]) => void;
 
-  addIPRequirement: (req: TopicIPRequirement) => void;
-  updateIPRequirement: (topicId: string, updates: Partial<TopicIPRequirement>) => void;
-
-  addPowerGridReq: (req: TopicPowerGridRequirement) => void;
-  updatePowerGridReq: (id: string, updates: Partial<TopicPowerGridRequirement>) => void;
-  removePowerGridReq: (id: string) => void;
-
-  addNodeTarget: (target: TopicNodeTarget) => void;
-  updateNodeTarget: (id: string, updates: Partial<TopicNodeTarget>) => void;
-  removeNodeTarget: (id: string) => void;
-
+  // Warning rules
   updateWarningRule: (id: string, updates: Partial<WarningRule>) => void;
 
+  // Achievement CRUD
   addAchievement: (achievement: Achievement) => void;
   updateAchievement: (id: string, updates: Partial<Achievement>) => void;
   lockAchievement: (id: string) => void;
@@ -67,6 +62,7 @@ interface AppState {
   rejectAchievement: (id: string, reason: string, approver: string) => void;
   returnAchievement: (id: string, reason: string, approver: string) => void;
 
+  // Archive CRUD
   addArchiveCategory: (category: ArchiveCategory) => void;
   updateArchiveCategory: (id: string, updates: Partial<ArchiveCategory>) => void;
   removeArchiveCategory: (id: string) => void;
@@ -77,8 +73,23 @@ interface AppState {
   updateArchiveRequirement: (id: string, updates: Partial<ArchiveRequirement>) => void;
   removeArchiveRequirement: (id: string) => void;
 
-  addOperationRecord: (record: OperationRecord) => void;
+  // Power grid
+  addPowerGridReq: (req: TopicPowerGridRequirement) => void;
+  updatePowerGridReq: (id: string, updates: Partial<TopicPowerGridRequirement>) => void;
+  removePowerGridReq: (id: string) => void;
 
+  // Auth actions
+  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => void;
+
+  // User CRUD
+  addUser: (user: User) => void;
+  updateUser: (id: string, updates: Partial<User>) => void;
+  removeUser: (id: string) => void;
+  resetUserPassword: (id: string) => void;
+  toggleUserEnabled: (id: string, enabled: boolean) => void;
+
+  // Reset
   resetToMock: () => void;
 }
 
@@ -88,20 +99,19 @@ const buildInitialState = () => ({
   topics: MOCK_TOPICS,
   nodes: MOCK_TIME_NODES,
   indicators: MOCK_INDICATORS,
-  topicIPRequirements: MOCK_TOPIC_IP_REQUIREMENTS,
-  topicPowerGridRequirements: MOCK_TOPIC_POWER_GRID_REQUIREMENTS,
-  topicNodeTargets: MOCK_TOPIC_NODE_TARGETS,
   warningRules: MOCK_WARNING_RULES,
   achievements: MOCK_ACHIEVEMENTS,
   archiveCategories: MOCK_ARCHIVE_CATEGORIES,
   archiveMaterials: MOCK_ARCHIVE_MATERIALS,
   archiveRequirements: MOCK_ARCHIVE_REQUIREMENTS,
-  operationRecords: MOCK_OPERATION_RECORDS,
+  topicPowerGridRequirements: MOCK_TOPIC_POWER_GRID_REQUIREMENTS,
+  users: MOCK_USERS,
+  currentUser: null as User | null,
 });
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set, _get) => ({
+    (set, get) => ({
       ...buildInitialState(),
 
       addUnit: (unit) => set((s) => ({ units: [...s.units, unit] })),
@@ -127,27 +137,6 @@ export const useAppStore = create<AppState>()(
         return { indicators: s.indicators.map((i) => map.has(i.id) ? { ...i, plannedQuantity: map.get(i.id)!, updatedAt: today } : i) };
       }),
 
-      addIPRequirement: (req) => set((s) => ({ topicIPRequirements: [...s.topicIPRequirements, req] })),
-      updateIPRequirement: (topicId, updates) => set((s) => ({
-        topicIPRequirements: s.topicIPRequirements.map((r) => (r.topicId === topicId ? { ...r, ...updates } : r)),
-      })),
-
-      addPowerGridReq: (req) => set((s) => ({ topicPowerGridRequirements: [...s.topicPowerGridRequirements, req] })),
-      updatePowerGridReq: (id, updates) => set((s) => ({
-        topicPowerGridRequirements: s.topicPowerGridRequirements.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-      })),
-      removePowerGridReq: (id) => set((s) => ({
-        topicPowerGridRequirements: s.topicPowerGridRequirements.filter((r) => r.id !== id),
-      })),
-
-      addNodeTarget: (target) => set((s) => ({ topicNodeTargets: [...s.topicNodeTargets, target] })),
-      updateNodeTarget: (id, updates) => set((s) => ({
-        topicNodeTargets: s.topicNodeTargets.map((t) => (t.id === id ? { ...t, ...updates } : t)),
-      })),
-      removeNodeTarget: (id) => set((s) => ({
-        topicNodeTargets: s.topicNodeTargets.filter((t) => t.id !== id),
-      })),
-
       updateWarningRule: (id, updates) => set((s) => ({ warningRules: s.warningRules.map((r) => (r.id === id ? { ...r, ...updates } : r)) })),
 
       addAchievement: (achievement) => set((s) => ({ achievements: [...s.achievements, achievement] })),
@@ -168,14 +157,54 @@ export const useAppStore = create<AppState>()(
       updateArchiveRequirement: (id, u) => set((s) => ({ archiveRequirements: s.archiveRequirements.map((r) => (r.id === id ? { ...r, ...u } : r)) })),
       removeArchiveRequirement: (id) => set((s) => ({ archiveRequirements: s.archiveRequirements.filter((r) => r.id !== id) })),
 
-      addOperationRecord: (record) => set((s) => ({ operationRecords: [...s.operationRecords, record] })),
+      addPowerGridReq: (req) => set((s) => ({ topicPowerGridRequirements: [...s.topicPowerGridRequirements, req] })),
+      updatePowerGridReq: (id, updates) => set((s) => ({ topicPowerGridRequirements: s.topicPowerGridRequirements.map((r) => (r.id === id ? { ...r, ...updates } : r)) })),
+      removePowerGridReq: (id) => set((s) => ({ topicPowerGridRequirements: s.topicPowerGridRequirements.filter((r) => r.id !== id) })),
+
+      // Auth actions
+      login: async (username: string, password: string) => {
+        const state = get();
+        const user = state.users.find((u) => u.username === username && u.password === password);
+        if (!user) {
+          return { success: false, error: '用户名或密码错误' };
+        }
+        if (!user.enabled) {
+          return { success: false, error: '该账号已被禁用' };
+        }
+        const updatedUser = { ...user, lastLoginAt: new Date().toISOString().split('T')[0] };
+        set((s) => ({
+          currentUser: updatedUser,
+          users: s.users.map((u) => (u.id === user.id ? updatedUser : u)),
+        }));
+        return { success: true };
+      },
+      logout: () => set({ currentUser: null }),
+
+      // User CRUD
+      addUser: (user) => set((s) => ({ users: [...s.users, user] })),
+      updateUser: (id, updates) => set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, ...updates } : u)) })),
+      removeUser: (id) => set((s) => ({ users: s.users.filter((u) => u.id !== id) })),
+      resetUserPassword: (id) => set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, password: '123456' } : u)) })),
+      toggleUserEnabled: (id, enabled) => set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, enabled } : u)) })),
 
       resetToMock: () => set(buildInitialState()),
     }),
-    { name: 'research-achievement-storage-v5' }
+    { name: 'research-achievement-storage-v6' }
   )
 );
 
 export const canEditAchievement = (status: string): boolean => {
   return status === '草稿' || status === '退回修改';
+};
+
+export const canAccess = (role: UserRole, module: string): boolean => {
+  const access: Record<UserRole, string[]> = {
+    '系统管理员': ['all'],
+    '项目管理人员': ['research', 'archive', 'monitoring'],
+    '课题用户': ['achievement-entry', 'monitoring'],
+    '成果审批人员': ['achievement-approval', 'monitoring'],
+  };
+  const allowed = access[role] || [];
+  if (allowed.includes('all')) return true;
+  return allowed.includes(module);
 };

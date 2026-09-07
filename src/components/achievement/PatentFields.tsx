@@ -1,11 +1,20 @@
 import { Col, Form, Input, Row, Select } from 'antd';
-import { patentScopeOptions } from '../../utils/helpers';
+import { patentScopeOptions, PATENT_STATUS_OPTIONS } from '../../utils/helpers';
 
 const { Option } = Select;
 
 export function PatentFields() {
   return (
     <Row gutter={16}>
+      <Col span={12}>
+        <Form.Item label="专利状态" name="patentStatus" rules={[{ required: true, message: '请选择专利状态' }]}>
+          <Select placeholder="选择专利状态">
+            {PATENT_STATUS_OPTIONS.map((s) => (
+              <Option key={s} value={s}>{s}</Option>
+            ))}
+          </Select>
+        </Form.Item>
+      </Col>
       <Col span={12}>
         <Form.Item label="国内或国际" name="patentScope">
           <Select placeholder="选择范围" allowClear>

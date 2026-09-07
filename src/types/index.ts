@@ -22,17 +22,15 @@ export interface Topic {
   remarks?: string;
 }
 
+// 电网公司主导成果要求
+export interface TopicPowerGridRequirement {
+  id: string; projectId: string; topicId: string;
+  achievementType: '学术论文' | '发明专利' | '软件著作权' | '标准规范';
+  requiredCount: number;
+}
+
 export type AchievementType = '学术论文' | '发明专利' | '软件著作权' | '标准规范' | '人才培养';
 export const ACHIEVEMENT_TYPES: AchievementType[] = ['学术论文', '发明专利', '软件著作权', '标准规范', '人才培养'];
-
-export type PaperRecognitionType = '录用' | '正式刊出';
-export const PAPER_RECOGNITION_TYPES: PaperRecognitionType[] = ['录用', '正式刊出'];
-
-export type PatentRecognitionType = '受理' | '授权';
-export const PATENT_RECOGNITION_TYPES: PatentRecognitionType[] = ['受理', '授权'];
-
-export type SoftwareDevelopmentMode = '独立开发' | '合作开发' | '委托开发' | '下达任务开发';
-export const SOFTWARE_DEVELOPMENT_MODES: SoftwareDevelopmentMode[] = ['独立开发', '合作开发', '委托开发', '下达任务开发'];
 
 export type PaperType = 'SCI' | 'EI' | '中文核心' | 'CSCD' | '其他';
 export const PAPER_TYPES: PaperType[] = ['SCI', 'EI', '中文核心', 'CSCD', '其他'];
@@ -98,14 +96,14 @@ export interface Achievement {
 
   approvalOpinion?: string; approvedAt?: string; approver?: string;
 
-  // 认定类型
-  paperRecognitionType?: PaperRecognitionType;
-  patentRecognitionType?: PatentRecognitionType;
-  softwareDevelopmentMode?: string; // '独立开发' | '合作开发' | '委托开发' | '下达任务开发'
+  // 状态字段（替代旧认定类型）
+  paperStatus?: string;  // 撰写中 | 已投稿 | 已录用 | 已正式刊出
+  patentStatus?: string; // 申请材料准备中 | 已申请 | 已受理 | 已授权
+
   standardNumber?: string; publishDate?: string; implementDate?: string; // 标准已发布补充
 
   // 论文特有
-  isRepresentative?: boolean; isChineseJournal?: boolean; chineseJournalReason?: string;
+  isChineseJournal?: boolean;
   paperType?: string; journalName?: string; cnNumber?: string; issn?: string;
   doi?: string; firstAuthor?: string; correspondingAuthor?: string; allAuthors?: string;
   signingUnitList?: string; firstSigningUnit?: string; firstAuthorUnit?: string;
@@ -169,34 +167,6 @@ export interface WarningResult {
   deadline?: string; daysRemaining?: number; gap?: number;
 }
 
-// 课题知识产权要求
-export interface TopicIPRequirement {
-  topicId: string; requiredCount: number; includedTypes: Array<'发明专利' | '软件著作权'>;
-}
-
-// 电网公司主导成果要求
-export interface TopicPowerGridRequirement {
-  id: string; projectId: string; topicId: string;
-  achievementType: '学术论文' | '发明专利' | '软件著作权' | '标准规范';
-  requiredCount: number;
-}
-
-// 课题节点总指标
-export interface TopicNodeTarget {
-  id: string; projectId: string; topicId: string; nodeId: string;
-  achievementType: AchievementType; targetQuantity: number;
-}
-
-// 操作记录
-export interface OperationRecord {
-  id: string; projectId: string;
-  module: '课题配置' | '时间节点配置' | '指标分解';
-  operationType: '新增' | '修改' | '删除' | '导入' | '批量修改';
-  objectType: string; objectId?: string; objectName: string;
-  beforeValue?: unknown; afterValue?: unknown; description: string;
-  operator: string; operatedAt: string;
-}
-
 // 归档
 export interface ArchiveCategory {
   id: string; projectId: string; name: string; description: string; parentId?: string; sortOrder: number;
@@ -238,8 +208,25 @@ export interface ApprovalValidation {
   checks: { label: string; passed: boolean; detail?: string }[];
 }
 
+// 用户与认证
+export type UserRole = '系统管理员' | '项目管理人员' | '课题用户' | '成果审批人员';
+
+export interface User {
+  id: string; username: string; password: string; name: string;
+  unitId: string; phone?: string; email?: string;
+  role: UserRole; enabled: boolean;
+  createdAt: string; lastLoginAt?: string;
+}
+
+export interface AuthState {
+  currentUser: User | null; isAuthenticated: boolean;
+}
+
 // 文件服务接口
 export interface FileService {
   upload(file: File): Promise<{ fileId: string; fileName: string; fileUrl: string }>;
+  download(fileId: string): Promise<void>;
   preview(fileId: string): Promise<string>;
+  delete(fileId: string): Promise<void>;
+  getVersions(fileId: string): Promise<Array<{ version: number; fileName: string; uploadedAt: string; uploader: string }>>;
 }

@@ -17,7 +17,8 @@ export const paperTypeOptions: Array<'SCI' | 'EI' | '中文核心'> = ['SCI', 'E
 export const patentScopeOptions: Array<'国内' | '国际'> = ['国内', '国际'];
 export const educationLevelOptions: Array<'博士' | '硕士'> = ['博士', '硕士'];
 
-export const mockFileService = {
-  upload: async (file: File) => ({ fileId: `file-${Date.now()}`, fileName: file.name, fileUrl: URL.createObjectURL(file) }),
-  preview: async (fileId: string) => `mock://preview/${fileId}`,
-} as const;
+export const PAPER_STATUS_OPTIONS = ['撰写中', '已投稿', '已录用', '已正式刊出'] as const;
+export const PATENT_STATUS_OPTIONS = ['申请材料准备中', '已申请', '已受理', '已授权'] as const;
+
+// Re-export from services
+export { mockFileService } from '../services/fileService';

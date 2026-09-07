@@ -50,7 +50,6 @@ export const validateIndicator = (
   return errors;
 };
 
-// Duplicate achievement check
 export const checkDuplicateAchievement = (
   achievement: Achievement,
   allAchievements: Achievement[]
@@ -63,7 +62,6 @@ export const checkDuplicateAchievement = (
         const doiDup = others.find((a) => a.achievementType === '学术论文' && a.doi === achievement.doi);
         if (doiDup) return { isDuplicate: true, reason: `DOI 重复：${achievement.doi}（已有成果「${doiDup.title}」）` };
       }
-      // Normalize title for comparison
       const normalizedTitle = achievement.title.replace(/\s+/g, ' ').trim().toLowerCase();
       const titleDup = others.find(
         (a) =>
@@ -116,7 +114,6 @@ export const checkDuplicateAchievement = (
   return { isDuplicate: false, reason: undefined };
 };
 
-// Evidence rule validation using ACHIEVEMENT_EVIDENCE_RULES
 export const validateEvidenceMaterials = (
   achievement: Achievement
 ): { passed: boolean; detail?: string } => {
@@ -129,13 +126,11 @@ export const validateEvidenceMaterials = (
 
   const rule = evidenceDef.rule;
   if (rule.type === 'SINGLE') {
-    // All SINGLE options must be uploaded and approved
     const missing = rule.options.filter((opt) => !uploadedApproved.includes(opt));
     if (missing.length > 0) {
       return { passed: false, detail: `缺少已审核通过的材料：${missing.join('、')}` };
     }
   } else if (rule.type === 'OR') {
-    // At least one OR option must be uploaded and approved
     const hasAny = rule.options.some((opt) => uploadedApproved.includes(opt));
     if (!hasAny && rule.options.length > 0) {
       return { passed: false, detail: `需至少上传以下材料之一：${rule.options.join(' 或 ')}` };
@@ -144,7 +139,6 @@ export const validateEvidenceMaterials = (
   return { passed: true };
 };
 
-// 成果审批前系统自动校验
 export const validateAchievementForApproval = (
   achievement: Achievement,
   indicator?: IndicatorConfig,
@@ -161,32 +155,32 @@ export const validateAchievementForApproval = (
     detail: hasValidIndicator ? undefined : '未关联有效指标',
   });
 
-  // 2. 成果认定状态检查（基于认定类型）
+  // 2. 成果认定状态检查（基于 paperStatus/patentStatus）
   let recognitionMet = true;
   let recognitionDetail: string | undefined;
   switch (achievement.achievementType) {
     case '学术论文':
-      if (!achievement.paperRecognitionType) {
+      if (!achievement.paperStatus) {
         recognitionMet = false;
-        recognitionDetail = '未选择论文认定类型（录用/正式刊出）';
-      } else if (achievement.paperRecognitionType === '录用' && !achievement.acceptanceDate) {
+        recognitionDetail = '未选择论文状态';
+      } else if (achievement.paperStatus === '已录用' && !achievement.acceptanceDate) {
         recognitionMet = false;
-        recognitionDetail = '录用类型需填写录用日期';
-      } else if (achievement.paperRecognitionType === '正式刊出' && !achievement.publicationDate) {
+        recognitionDetail = '已录用状态需填写录用日期';
+      } else if (achievement.paperStatus === '已正式刊出' && !achievement.publicationDate) {
         recognitionMet = false;
-        recognitionDetail = '正式刊出类型需填写正式刊出日期';
+        recognitionDetail = '已正式刊出状态需填写正式刊出日期';
       }
       break;
     case '发明专利':
-      if (!achievement.patentRecognitionType) {
+      if (!achievement.patentStatus) {
         recognitionMet = false;
-        recognitionDetail = '未选择专利认定类型（受理/授权）';
-      } else if (achievement.patentRecognitionType === '受理' && !achievement.receiptDate) {
+        recognitionDetail = '未选择专利状态';
+      } else if (achievement.patentStatus === '已受理' && !achievement.receiptDate) {
         recognitionMet = false;
-        recognitionDetail = '受理类型需填写受理日期';
-      } else if (achievement.patentRecognitionType === '授权' && !achievement.grantDate) {
+        recognitionDetail = '已受理状态需填写受理日期';
+      } else if (achievement.patentStatus === '已授权' && !achievement.grantDate) {
         recognitionMet = false;
-        recognitionDetail = '授权类型需填写授权日期';
+        recognitionDetail = '已授权状态需填写授权日期';
       }
       break;
     case '软件著作权':

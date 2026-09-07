@@ -9,7 +9,6 @@ import type {
 } from '../types';
 import { daysUntil } from './helpers';
 
-// 审批通过且计入指标 + 按期完成（recognizedCompletionDate <= deadline）
 export const isRecognized = (a: Achievement, deadline?: string) => {
   const approved = a.status === '审批通过' && a.countsToIndicator;
   if (!approved) return false;
@@ -32,8 +31,6 @@ export const calculateCompletionStats = (
   const node = nodes.find((n) => n.id === indicator.nodeId);
   const deadline = node?.deadline;
 
-  // Filter by topicId + unitId + achievementType (NOT indicatorId)
-  // This allows mid-term achievements to count toward final cumulative nodes
   const relevant = achievements.filter(
     (a) =>
       a.topicId === indicator.topicId &&
@@ -77,27 +74,25 @@ export const calculateDomesticJournalRatio = (
   achievements: Achievement[],
   topics: Topic[]
 ): DomesticJournalRatioResult => {
-  // Only count representative papers with status === '审批通过' && countsToIndicator
-  const representative = achievements.filter(
+  // Count ALL papers with status === '审批通过' && countsToIndicator (NO isRepresentative filter)
+  const approvedPapers = achievements.filter(
     (a) =>
       a.achievementType === '学术论文' &&
-      a.isRepresentative &&
       a.status === '审批通过' &&
       a.countsToIndicator
   );
-  const total = representative.length;
-  const chinese = representative.filter((a) => a.isChineseJournal).length;
+  const total = approvedPapers.length;
+  const chinese = approvedPapers.filter((a) => a.isChineseJournal).length;
   const ratio = total > 0 ? (chinese / total) * 100 : null;
 
-  // 预计：包含审批中/已提交的代表性论文
-  const projectedRepresentative = achievements.filter(
+  // 预计：包含审批中/已提交的论文
+  const projected = achievements.filter(
     (a) =>
       a.achievementType === '学术论文' &&
-      a.isRepresentative &&
       (a.status === '审批通过' || a.status === '已提交' || a.status === '审批中')
   );
-  const projectedTotal = projectedRepresentative.length;
-  const projectedChinese = projectedRepresentative.filter((a) => a.isChineseJournal).length;
+  const projectedTotal = projected.length;
+  const projectedChinese = projected.filter((a) => a.isChineseJournal).length;
   const projectedRatio = projectedTotal > 0 ? (projectedChinese / projectedTotal) * 100 : null;
 
   // Total required across all topics
@@ -121,10 +116,17 @@ export const calculateTopicChineseJournalCount = (topicId: string, achievements:
     (a) =>
       a.topicId === topicId &&
       a.achievementType === '学术论文' &&
-      a.isRepresentative &&
       a.isChineseJournal &&
       a.status === '审批通过' &&
       a.countsToIndicator
+  ).length;
+};
+
+// IP stats: only count 发明专利 + 软件著作权 (审批通过 + countsToIndicator)
+export const calculateIPStats = (achievements: Achievement[]) => {
+  const ipTypes: AchievementType[] = ['发明专利', '软件著作权'];
+  return achievements.filter(
+    (a) => ipTypes.includes(a.achievementType) && a.status === '审批通过' && a.countsToIndicator
   ).length;
 };
 

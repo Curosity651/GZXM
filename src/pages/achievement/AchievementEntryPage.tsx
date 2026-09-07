@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Button, Card, Col, DatePicker, Descriptions, Form, Input, message, Modal,
-  Row, Select, Space, Switch, Table, Tag, Typography, Upload,
+  Row, Select, Space, Table, Tag, Typography, Upload,
 } from 'antd';
 import dayjs from 'dayjs';
 import {
@@ -11,11 +11,11 @@ import {
 import { useAppStore, canEditAchievement } from '../../store';
 import {
   ACHIEVEMENT_EVIDENCE_RULES, ACHIEVEMENT_STATUS, ACHIEVEMENT_TYPES,
-  PAPER_RECOGNITION_TYPES, PAPER_TYPES,
-  PATENT_RECOGNITION_TYPES, SOFTWARE_DEVELOPMENT_MODES,
+  PAPER_TYPES,
   type Achievement, type AchievementMaterial,
 } from '../../types';
 import { mockFileService } from '../../utils/helpers';
+import { PAPER_STATUS_OPTIONS, PATENT_STATUS_OPTIONS } from '../../utils/helpers';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -23,7 +23,7 @@ const { Text } = Typography;
 
 export function AchievementEntryPage() {
   const {
-    project, topics, units, achievements,
+    project, topics, units, indicators, nodes, achievements,
     addAchievement, updateAchievement, lockAchievement,
   } = useAppStore();
 
@@ -37,17 +37,29 @@ export function AchievementEntryPage() {
 
   const topicMap = Object.fromEntries(topics.map((t) => [t.id, t]));
   const unitMap = Object.fromEntries(units.map((u) => [u.id, u.name]));
+  const nodeMap = Object.fromEntries(nodes.map((n) => [n.id, n]));
 
   const selectedTopicId: string | undefined = Form.useWatch('topicId', form);
   const selectedAchievementType: string | undefined = Form.useWatch('achievementType', form);
-  const paperRecogType: string | undefined = Form.useWatch('paperRecognitionType', form);
-  const patentRecogType: string | undefined = Form.useWatch('patentRecognitionType', form);
-  const isChinese: boolean | undefined = Form.useWatch('isChineseJournal', form);
+  const paperStatus: string | undefined = Form.useWatch('paperStatus', form);
+  const patentStatus: string | undefined = Form.useWatch('patentStatus', form);
 
   const selectedTopic = topics.find((t) => t.id === selectedTopicId);
   const unitOptions = selectedTopic
     ? [selectedTopic.leadingUnitId, ...selectedTopic.participatingUnitIds]
     : [];
+
+  // Indicator linking: find matching indicator for selected topic+unit+type
+  const matchingIndicators = useMemo(() => {
+    if (!selectedTopicId || !selectedAchievementType) return [];
+    const unitId = form.getFieldValue('unitId');
+    return indicators.filter(
+      (i) =>
+        i.topicId === selectedTopicId &&
+        i.achievementType === selectedAchievementType &&
+        (!unitId || i.unitId === unitId)
+    );
+  }, [selectedTopicId, selectedAchievementType, indicators, form]);
 
   const filtered = achievements.filter((a) => {
     return (
@@ -58,7 +70,6 @@ export function AchievementEntryPage() {
     );
   });
 
-  // Auto-set material fields when achievement type changes
   const evidenceDef = selectedAchievementType
     ? ACHIEVEMENT_EVIDENCE_RULES[selectedAchievementType as keyof typeof ACHIEVEMENT_EVIDENCE_RULES]
     : null;
@@ -105,11 +116,11 @@ export function AchievementEntryPage() {
     // Determine recognizedCompletionDate from type-specific fields
     let recDate = getDateStr(values.completionDate);
     if (values.achievementType === '学术论文') {
-      if (values.paperRecognitionType === '录用') recDate = getDateStr(values.acceptanceDate) || recDate;
-      else if (values.paperRecognitionType === '正式刊出') recDate = getDateStr(values.publicationDate) || recDate;
+      if (values.paperStatus === '已录用') recDate = getDateStr(values.acceptanceDate) || recDate;
+      else if (values.paperStatus === '已正式刊出') recDate = getDateStr(values.publicationDate) || recDate;
     } else if (values.achievementType === '发明专利') {
-      if (values.patentRecognitionType === '受理') recDate = getDateStr(values.receiptDate) || recDate;
-      else if (values.patentRecognitionType === '授权') recDate = getDateStr(values.grantDate) || recDate;
+      if (values.patentStatus === '已受理') recDate = getDateStr(values.receiptDate) || recDate;
+      else if (values.patentStatus === '已授权') recDate = getDateStr(values.grantDate) || recDate;
     } else if (values.achievementType === '软件著作权') {
       recDate = getDateStr(values.certificateDate) || recDate;
     } else if (values.achievementType === '标准规范') {
@@ -122,6 +133,19 @@ export function AchievementEntryPage() {
     const matNames: string[] = values._materialFields || [];
     const materials = saveMaterials(newId, matNames, today);
 
+    // Indicator linking: find matching indicator
+    let indicatorId = editing?.indicatorId || '';
+    let nodeId = editing?.nodeId || '';
+    if (!indicatorId && values.topicId && values.unitId && values.achievementType) {
+      const match = indicators.find(
+        (i) => i.topicId === values.topicId && i.unitId === values.unitId && i.achievementType === values.achievementType
+      );
+      if (match) {
+        indicatorId = match.id;
+        nodeId = match.nodeId;
+      }
+    }
+
     const paperTypeStr = Array.isArray(values.paperType) ? values.paperType.join(',') : values.paperType;
 
     return {
@@ -129,8 +153,8 @@ export function AchievementEntryPage() {
       topicId: values.topicId,
       unitId: values.unitId,
       achievementType: values.achievementType,
-      nodeId: '',
-      indicatorId: '',
+      nodeId,
+      indicatorId,
       title: values.title,
       responsiblePerson: values.responsiblePerson,
       otherContributors: otherArr,
@@ -139,18 +163,15 @@ export function AchievementEntryPage() {
       recognizedCompletionDate: recDate,
       remarks: values.remarks || '',
       countsToIndicator: false,
-      // recognition types
-      paperRecognitionType: values.paperRecognitionType,
-      patentRecognitionType: values.patentRecognitionType,
-      softwareDevelopmentMode: values.softwareDevelopmentMode,
+      // status fields
+      paperStatus: values.paperStatus,
+      patentStatus: values.patentStatus,
       standardNumber: values.standardNumber,
       publishDate: getDateStr(values.publishDate),
       implementDate: getDateStr(values.implementDate),
       // paper
       paperType: paperTypeStr,
-      isRepresentative: values.isRepresentative,
       isChineseJournal: values.isChineseJournal,
-      chineseJournalReason: values.chineseJournalReason,
       journalName: values.journalName,
       signingUnitList: values.signingUnitList,
       firstSigningUnit: values.firstSigningUnit,
@@ -194,7 +215,7 @@ export function AchievementEntryPage() {
       firstDeveloperUnit: values.firstDeveloperUnit,
       softwareMainFunctions: values.softwareMainFunctions,
       devCompletionDate: getDateStr(values.devCompletionDate),
-      completionDate: getDateStr(values.devCompletionDate), // type field
+      completionDate: getDateStr(values.devCompletionDate),
       registrationNumber: values.registrationNumber,
       certificateDate: getDateStr(values.certificateDate),
       // standard
@@ -231,31 +252,40 @@ export function AchievementEntryPage() {
     if (!values.title) errs.push('请输入成果名称/题目');
     if (!values.responsiblePerson) errs.push('请输入第一完成人');
 
+    // Indicator matching check
+    if (values.topicId && values.unitId && values.achievementType) {
+      const match = indicators.find(
+        (i) => i.topicId === values.topicId && i.unitId === values.unitId && i.achievementType === values.achievementType
+      );
+      if (!match) {
+        errs.push('该课题、单位和成果类型下没有配置指标，请先在指标配置中设置');
+      }
+    }
+
     if (values.achievementType === '学术论文') {
-      if (!values.paperRecognitionType) errs.push('请选择论文认定类型');
+      if (!values.paperStatus) errs.push('请选择论文状态');
       if (!values.journalName) errs.push('请输入期刊名称');
       if (!values.allAuthors) errs.push('请输入作者列表');
       if (!values.firstAuthor) errs.push('请输入第一作者');
       if (!values.signingUnitList) errs.push('请输入署名单位列表');
       if (!values.firstSigningUnit) errs.push('请输入第一署名单位');
-      if (values.paperRecognitionType === '录用' && !values.acceptanceDate) errs.push('录用类型需填写录用日期');
-      if (values.paperRecognitionType === '正式刊出' && !values.publicationDate) errs.push('正式刊出类型需填写刊出日期');
+      if (values.paperStatus === '已录用' && !values.acceptanceDate) errs.push('已录用状态需填写录用日期');
+      if (values.paperStatus === '已正式刊出' && !values.publicationDate) errs.push('已正式刊出状态需填写刊出日期');
     } else if (values.achievementType === '发明专利') {
-      if (!values.patentRecognitionType) errs.push('请选择专利认定类型');
+      if (!values.patentStatus) errs.push('请选择专利状态');
       if (!values.applicationNumber) errs.push('请输入申请号');
       if (!values.applicationDate) errs.push('请选择申请日期');
-      if (values.patentRecognitionType === '受理') {
-        if (!values.receiptDate) errs.push('受理类型需填写受理日期');
-        if (!values.receiptNumber) errs.push('受理类型需填写受理通知书编号');
+      if (values.patentStatus === '已受理') {
+        if (!values.receiptDate) errs.push('已受理状态需填写受理日期');
+        if (!values.receiptNumber) errs.push('已受理状态需填写受理通知书编号');
       }
-      if (values.patentRecognitionType === '授权') {
-        if (!values.patentNumber) errs.push('授权类型需填写专利号');
-        if (!values.grantDate) errs.push('授权类型需填写授权公告日期');
+      if (values.patentStatus === '已授权') {
+        if (!values.patentNumber) errs.push('已授权状态需填写专利号');
+        if (!values.grantDate) errs.push('已授权状态需填写授权公告日期');
       }
       if (!values.inventorList) errs.push('请输入发明人列表');
       if (!values.firstInventor) errs.push('请输入第一发明人');
     } else if (values.achievementType === '软件著作权') {
-      if (!values.softwareDevelopmentMode) errs.push('请选择开发方式');
       if (!values.softwareFullName) errs.push('请输入软件全称');
       if (!values.version) errs.push('请输入版本号');
       if (!values.devCompletionDate) errs.push('请选择开发完成日期');
@@ -273,9 +303,6 @@ export function AchievementEntryPage() {
     }
 
     // Materials validation
-    const evidenceDef = values.achievementType
-      ? ACHIEVEMENT_EVIDENCE_RULES[values.achievementType as keyof typeof ACHIEVEMENT_EVIDENCE_RULES]
-      : null;
     if (evidenceDef) {
       const opts = evidenceDef.rule.options;
       if (evidenceDef.rule.type === 'SINGLE') {
@@ -289,32 +316,7 @@ export function AchievementEntryPage() {
     return errs;
   };
 
-  /* ---------- actions ---------- */
-
-  const closeForm = () => {
-    setVisible(false);
-    setEditing(null);
-    setUploadedFiles({});
-    form.resetFields();
-  };
-
-  const handleSaveDraft = () => {
-    const values = form.getFieldsValue();
-    if (!values.topicId || !values.unitId || !values.achievementType || !values.title) {
-      message.error('保存草稿需要填写：所属课题、成果完成单位、成果类型、成果名称');
-      return;
-    }
-    const today = new Date().toISOString().split('T')[0];
-    const data = buildAchievementFromForm(values, today);
-    if (editing) {
-      updateAchievement(editing.id, { ...data, updatedAt: today } as any);
-      message.success('草稿更新成功');
-    } else {
-      addAchievement({ ...data, id: `ach-${Date.now()}`, status: '草稿', createdAt: today, updatedAt: today } as Achievement);
-      message.success('保存草稿成功');
-    }
-    closeForm();
-  };
+  /* ---------- UNIFIED submit method ---------- */
 
   const handleSubmitApproval = () => {
     form.validateFields().then((values: any) => {
@@ -344,6 +346,33 @@ export function AchievementEntryPage() {
         },
       });
     }).catch(() => {});
+  };
+
+  /* ---------- actions ---------- */
+
+  const closeForm = () => {
+    setVisible(false);
+    setEditing(null);
+    setUploadedFiles({});
+    form.resetFields();
+  };
+
+  const handleSaveDraft = () => {
+    const values = form.getFieldsValue();
+    if (!values.topicId || !values.unitId || !values.achievementType || !values.title) {
+      message.error('保存草稿需要填写：所属课题、成果完成单位、成果类型、成果名称');
+      return;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    const data = buildAchievementFromForm(values, today);
+    if (editing) {
+      updateAchievement(editing.id, { ...data, updatedAt: today } as any);
+      message.success('草稿更新成功');
+    } else {
+      addAchievement({ ...data, id: `ach-${Date.now()}`, status: '草稿', createdAt: today, updatedAt: today } as Achievement);
+      message.success('保存草稿成功');
+    }
+    closeForm();
   };
 
   const openForm = (achievement?: Achievement) => {
@@ -406,19 +435,10 @@ export function AchievementEntryPage() {
     未提交: 'default', 待审核: 'processing', 审核通过: 'success', 退回修改: 'error',
   };
 
-  const getMatSummary = (ach: Achievement) => {
-    const mats = ach.materials || [];
-    if (mats.length === 0) return <Tag>无材料</Tag>;
-    const approved = mats.filter((m) => m.status === '审核通过').length;
-    const pending = mats.filter((m) => m.status === '待审核').length;
-    const returned = mats.filter((m) => m.status === '退回修改').length;
-    const notSub = mats.filter((m) => m.status === '未提交').length;
-    const parts = [];
-    if (approved > 0) parts.push(`${approved}通过`);
-    if (pending > 0) parts.push(`${pending}待审`);
-    if (returned > 0) parts.push(`${returned}退回`);
-    if (notSub > 0) parts.push(`${notSub}未提交`);
-    return <Tag color={approved === mats.length ? 'success' : 'warning'}>{parts.join('/')}</Tag>;
+  const getTypeStatusColumn = (_: any, record: Achievement) => {
+    if (record.achievementType === '学术论文') return record.paperStatus || '-';
+    if (record.achievementType === '发明专利') return record.patentStatus || '-';
+    return '-';
   };
 
   const columns = [
@@ -427,10 +447,19 @@ export function AchievementEntryPage() {
     { title: '课题', dataIndex: 'topicId', key: 'topicId', render: (v: string) => topicMap[v]?.name || v },
     { title: '成果完成单位', dataIndex: 'unitId', key: 'unitId', render: (v: string) => unitMap[v] || v },
     { title: '第一完成人', dataIndex: 'responsiblePerson', key: 'responsiblePerson' },
-    { title: '实际认定完成时间', dataIndex: 'recognizedCompletionDate', key: 'recognizedCompletionDate', render: (v: string) => v || '-' },
-    { title: '佐证材料状态', key: 'matStatus', render: (_: any, r: Achievement) => getMatSummary(r) },
-    { title: '提交时间', dataIndex: 'submittedAt', key: 'submittedAt', render: (v: string) => v || '-' },
+    { title: '论文状态/专利状态', key: 'typeStatus', render: getTypeStatusColumn },
+    {
+      title: '指标', dataIndex: 'indicatorId', key: 'indicatorId',
+      render: (v: string, _record: Achievement) => {
+        if (!v) return <Tag color="default">未关联</Tag>;
+        const ind = indicators.find((i) => i.id === v);
+        if (!ind) return <Tag color="default">未关联</Tag>;
+        const node = nodeMap[ind.nodeId];
+        return <Tag color="blue">{ind.achievementType} / {node?.name || ind.nodeId}</Tag>;
+      },
+    },
     { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag color={statusColor[v]}>{v}</Tag> },
+    { title: '提交时间', dataIndex: 'submittedAt', key: 'submittedAt', render: (v: string) => v || '-' },
     {
       title: '操作', key: 'action',
       render: (_: any, record: Achievement) => (
@@ -442,7 +471,10 @@ export function AchievementEntryPage() {
               <Button type="primary" icon={<SendOutlined />} size="small" onClick={() => {
                 Modal.confirm({
                   title: '确认提交该成果审批？',
+                  icon: <ExclamationCircleOutlined />,
                   content: '提交后成果信息和佐证材料将被锁定，无法再编辑修改。',
+                  okText: '确认提交',
+                  cancelText: '再检查下',
                   onOk: () => {
                     lockAchievement(record.id);
                     message.success(record.status === '退回修改' ? '已重新提交' : '已提交审批');
@@ -463,7 +495,6 @@ export function AchievementEntryPage() {
   return (
     <>
       <Card title="成果录入" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新增成果</Button>}>
-        {/* Filters */}
         <Space style={{ marginBottom: 16 }} wrap>
           <Select placeholder="选择课题" allowClear style={{ width: 200 }}
             onChange={(v) => setFilter({ ...filter, topicId: v, unitId: '' })}>
@@ -560,32 +591,60 @@ export function AchievementEntryPage() {
             </Row>
           </Card>
 
-          {/* ---------- 2. Recognition Type ---------- */}
+          {/* ---------- 2. Status (replaces old recognition type) ---------- */}
           {selectedAchievementType === '学术论文' && (
-            <Card title="论文认定类型" size="small" style={{ marginBottom: 16 }}>
-              <Form.Item label="认定类型" name="paperRecognitionType" rules={[{ required: true, message: '请选择认定类型' }]}>
-                <Select placeholder="选择认定类型">
-                  {PAPER_RECOGNITION_TYPES.map((t) => (<Option key={t} value={t}>{t}</Option>))}
+            <Card title="论文状态" size="small" style={{ marginBottom: 16 }}>
+              <Form.Item label="论文状态" name="paperStatus" rules={[{ required: true, message: '请选择论文状态' }]}>
+                <Select placeholder="选择论文状态">
+                  {PAPER_STATUS_OPTIONS.map((s) => (<Option key={s} value={s}>{s}</Option>))}
                 </Select>
               </Form.Item>
+              {matchingIndicators.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary">关联指标：</Text>
+                  {matchingIndicators.map((ind) => (
+                    <Tag key={ind.id} color="blue">{nodeMap[ind.nodeId]?.name || ind.nodeId}（{ind.plannedQuantity}篇）</Tag>
+                  ))}
+                </div>
+              )}
             </Card>
           )}
           {selectedAchievementType === '发明专利' && (
-            <Card title="专利认定类型" size="small" style={{ marginBottom: 16 }}>
-              <Form.Item label="认定类型" name="patentRecognitionType" rules={[{ required: true, message: '请选择认定类型' }]}>
-                <Select placeholder="选择认定类型">
-                  {PATENT_RECOGNITION_TYPES.map((t) => (<Option key={t} value={t}>{t}</Option>))}
+            <Card title="专利状态" size="small" style={{ marginBottom: 16 }}>
+              <Form.Item label="专利状态" name="patentStatus" rules={[{ required: true, message: '请选择专利状态' }]}>
+                <Select placeholder="选择专利状态">
+                  {PATENT_STATUS_OPTIONS.map((s) => (<Option key={s} value={s}>{s}</Option>))}
                 </Select>
               </Form.Item>
+              {matchingIndicators.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary">关联指标：</Text>
+                  {matchingIndicators.map((ind) => (
+                    <Tag key={ind.id} color="blue">{nodeMap[ind.nodeId]?.name || ind.nodeId}（{ind.plannedQuantity}项）</Tag>
+                  ))}
+                </div>
+              )}
             </Card>
           )}
-          {selectedAchievementType === '软件著作权' && (
-            <Card title="软著开发方式" size="small" style={{ marginBottom: 16 }}>
-              <Form.Item label="开发方式" name="softwareDevelopmentMode" rules={[{ required: true, message: '请选择开发方式' }]}>
-                <Select placeholder="选择开发方式">
-                  {SOFTWARE_DEVELOPMENT_MODES.map((m) => (<Option key={m} value={m}>{m}</Option>))}
-                </Select>
-              </Form.Item>
+          {selectedAchievementType === '软件著作权' && matchingIndicators.length > 0 && (
+            <Card title="关联指标" size="small" style={{ marginBottom: 16 }}>
+              {matchingIndicators.map((ind) => (
+                <Tag key={ind.id} color="blue">{nodeMap[ind.nodeId]?.name || ind.nodeId}（{ind.plannedQuantity}项）</Tag>
+              ))}
+            </Card>
+          )}
+          {selectedAchievementType === '标准规范' && matchingIndicators.length > 0 && (
+            <Card title="关联指标" size="small" style={{ marginBottom: 16 }}>
+              {matchingIndicators.map((ind) => (
+                <Tag key={ind.id} color="blue">{nodeMap[ind.nodeId]?.name || ind.nodeId}（{ind.plannedQuantity}项）</Tag>
+              ))}
+            </Card>
+          )}
+          {selectedAchievementType === '人才培养' && matchingIndicators.length > 0 && (
+            <Card title="关联指标" size="small" style={{ marginBottom: 16 }}>
+              {matchingIndicators.map((ind) => (
+                <Tag key={ind.id} color="blue">{nodeMap[ind.nodeId]?.name || ind.nodeId}（{ind.plannedQuantity}人）</Tag>
+              ))}
             </Card>
           )}
 
@@ -607,28 +666,23 @@ export function AchievementEntryPage() {
                 <Col span={12}><Form.Item label="第一作者" name="firstAuthor"><Input /></Form.Item></Col>
                 <Col span={12}><Form.Item label="第一作者所属单位" name="firstAuthorUnit"><Input /></Form.Item></Col>
                 <Col span={12}>
-                  <Form.Item label="是否代表性论文" name="isRepresentative" valuePropName="checked"><Switch /></Form.Item>
+                  <Form.Item label="是否国内期刊论文" name="isChineseJournal" valuePropName="checked">
+                    <Select placeholder="选择" allowClear>
+                      <Option value={true}>是</Option>
+                      <Option value={false}>否</Option>
+                    </Select>
+                  </Form.Item>
                 </Col>
-                <Col span={12}>
-                  <Form.Item label="是否国内期刊论文" name="isChineseJournal" valuePropName="checked"><Switch /></Form.Item>
-                </Col>
-                {isChinese && (
-                  <>
-                    <Col span={12}><Form.Item label="CN号" name="cnNumber"><Input /></Form.Item></Col>
-                    <Col span={24}>
-                      <Form.Item label="判定说明" name="chineseJournalReason"><TextArea rows={2} /></Form.Item>
-                    </Col>
-                  </>
-                )}
+                <Col span={12}><Form.Item label="CN号" name="cnNumber"><Input /></Form.Item></Col>
                 <Col span={12}>
                   <Form.Item label="录用日期" name="acceptanceDate"
-                    rules={paperRecogType === '录用' ? [{ required: true, message: '请选择录用日期' }] : undefined}>
+                    rules={paperStatus === '已录用' ? [{ required: true, message: '请选择录用日期' }] : undefined}>
                     <DatePicker style={{ width: '100%' }} placeholder="选择录用日期" />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
                   <Form.Item label="正式刊出日期" name="publicationDate"
-                    rules={paperRecogType === '正式刊出' ? [{ required: true, message: '请选择刊出日期' }] : undefined}>
+                    rules={paperStatus === '已正式刊出' ? [{ required: true, message: '请选择刊出日期' }] : undefined}>
                     <DatePicker style={{ width: '100%' }} placeholder="选择刊出日期" />
                   </Form.Item>
                 </Col>
@@ -668,7 +722,7 @@ export function AchievementEntryPage() {
                     <DatePicker style={{ width: '100%' }} placeholder="选择申请日期" />
                   </Form.Item>
                 </Col>
-                {patentRecogType === '受理' && (
+                {patentStatus === '已受理' && (
                   <>
                     <Col span={12}>
                       <Form.Item label="受理日期" name="receiptDate" rules={[{ required: true, message: '请选择受理日期' }]}>
@@ -682,7 +736,7 @@ export function AchievementEntryPage() {
                     </Col>
                   </>
                 )}
-                {patentRecogType === '授权' && (
+                {patentStatus === '已授权' && (
                   <>
                     <Col span={12}>
                       <Form.Item label="专利号" name="patentNumber" rules={[{ required: true, message: '请输入专利号' }]}>
@@ -735,7 +789,6 @@ export function AchievementEntryPage() {
           {selectedAchievementType === '标准规范' && (
             <Card title="标准规范详细信息" size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
-                <Col span={12}><Form.Item label="标准名称" name="title"><Input /></Form.Item></Col>
                 <Col span={12}>
                   <Form.Item label="标准级别" name="standardLevel">
                     <Select placeholder="选择标准级别" allowClear>
@@ -858,13 +911,18 @@ export function AchievementEntryPage() {
               <Descriptions.Item label="其他参与人">{(detailAchievement.otherContributors || []).join(', ') || '-'}</Descriptions.Item>
               <Descriptions.Item label="完成时间">{detailAchievement.plannedCompletionDate || '-'}</Descriptions.Item>
               <Descriptions.Item label="实际认定完成时间">{detailAchievement.recognizedCompletionDate || '-'}</Descriptions.Item>
+              <Descriptions.Item label="论文状态/专利状态">
+                {detailAchievement.achievementType === '学术论文' && (detailAchievement.paperStatus || '-')}
+                {detailAchievement.achievementType === '发明专利' && (detailAchievement.patentStatus || '-')}
+                {(detailAchievement.achievementType !== '学术论文' && detailAchievement.achievementType !== '发明专利') && '-'}
+              </Descriptions.Item>
               <Descriptions.Item label="状态"><Tag color={statusColor[detailAchievement.status]}>{detailAchievement.status}</Tag></Descriptions.Item>
               <Descriptions.Item label="备注">{detailAchievement.remarks || '-'}</Descriptions.Item>
             </Descriptions>
 
             {detailAchievement.achievementType === '学术论文' && (
-              <Descriptions title="论文认定" bordered column={2} size="small">
-                <Descriptions.Item label="认定类型">{detailAchievement.paperRecognitionType || '-'}</Descriptions.Item>
+              <Descriptions title="论文信息" bordered column={2} size="small">
+                <Descriptions.Item label="论文状态">{detailAchievement.paperStatus || '-'}</Descriptions.Item>
                 <Descriptions.Item label="论文类别">{detailAchievement.paperType || '-'}</Descriptions.Item>
                 <Descriptions.Item label="期刊名称">{detailAchievement.journalName || '-'}</Descriptions.Item>
                 <Descriptions.Item label="署名单位列表">{detailAchievement.signingUnitList || '-'}</Descriptions.Item>
@@ -872,7 +930,6 @@ export function AchievementEntryPage() {
                 <Descriptions.Item label="作者列表">{detailAchievement.allAuthors || '-'}</Descriptions.Item>
                 <Descriptions.Item label="第一作者">{detailAchievement.firstAuthor || '-'}</Descriptions.Item>
                 <Descriptions.Item label="第一作者所属单位">{detailAchievement.firstAuthorUnit || '-'}</Descriptions.Item>
-                <Descriptions.Item label="是否代表性论文">{detailAchievement.isRepresentative ? '是' : '否'}</Descriptions.Item>
                 <Descriptions.Item label="是否国内期刊论文">{detailAchievement.isChineseJournal ? '是' : '否'}</Descriptions.Item>
                 <Descriptions.Item label="CN号">{detailAchievement.cnNumber || '-'}</Descriptions.Item>
                 <Descriptions.Item label="ISSN">{detailAchievement.issn || '-'}</Descriptions.Item>
@@ -887,8 +944,8 @@ export function AchievementEntryPage() {
             )}
 
             {detailAchievement.achievementType === '发明专利' && (
-              <Descriptions title="专利认定" bordered column={2} size="small">
-                <Descriptions.Item label="认定类型">{detailAchievement.patentRecognitionType || '-'}</Descriptions.Item>
+              <Descriptions title="专利信息" bordered column={2} size="small">
+                <Descriptions.Item label="专利状态">{detailAchievement.patentStatus || '-'}</Descriptions.Item>
                 <Descriptions.Item label="专利范围">{detailAchievement.patentScope || '-'}</Descriptions.Item>
                 <Descriptions.Item label="申请人列表">{detailAchievement.applicantList || '-'}</Descriptions.Item>
                 <Descriptions.Item label="第一申请人">{detailAchievement.firstApplicant || '-'}</Descriptions.Item>
@@ -909,7 +966,6 @@ export function AchievementEntryPage() {
 
             {detailAchievement.achievementType === '软件著作权' && (
               <Descriptions title="软著信息" bordered column={2} size="small">
-                <Descriptions.Item label="开发方式">{detailAchievement.softwareDevelopmentMode || '-'}</Descriptions.Item>
                 <Descriptions.Item label="软件全称">{detailAchievement.softwareFullName || '-'}</Descriptions.Item>
                 <Descriptions.Item label="软件简称">{detailAchievement.shortName || '-'}</Descriptions.Item>
                 <Descriptions.Item label="版本号">{detailAchievement.version || '-'}</Descriptions.Item>

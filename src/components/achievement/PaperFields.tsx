@@ -1,12 +1,20 @@
-import { Col, Form, Input, Row, Select, Switch } from 'antd';
-import { paperTypeOptions } from '../../utils/helpers';
+import { Col, Form, Input, Row, Select } from 'antd';
+import { paperTypeOptions, PAPER_STATUS_OPTIONS } from '../../utils/helpers';
 
 const { Option } = Select;
-const { TextArea } = Input;
 
 export function PaperFields() {
   return (
     <Row gutter={16}>
+      <Col span={12}>
+        <Form.Item label="论文状态" name="paperStatus" rules={[{ required: true, message: '请选择论文状态' }]}>
+          <Select placeholder="选择论文状态">
+            {PAPER_STATUS_OPTIONS.map((s) => (
+              <Option key={s} value={s}>{s}</Option>
+            ))}
+          </Select>
+        </Form.Item>
+      </Col>
       <Col span={12}>
         <Form.Item label="论文类型" name="paperType">
           <Select placeholder="选择论文类型" allowClear>
@@ -67,18 +75,11 @@ export function PaperFields() {
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="是否代表性论文" name="isRepresentative" valuePropName="checked">
-          <Switch />
-        </Form.Item>
-      </Col>
-      <Col span={12}>
-        <Form.Item label="是否我国科技期刊" name="isChineseJournal" valuePropName="checked">
-          <Switch />
-        </Form.Item>
-      </Col>
-      <Col span={24}>
-        <Form.Item label="我国科技期刊判定说明" name="chineseJournalReason">
-          <TextArea rows={2} />
+        <Form.Item label="是否国内期刊论文" name="isChineseJournal" valuePropName="checked">
+          <Select placeholder="选择" allowClear>
+            <Option value={true}>是</Option>
+            <Option value={false}>否</Option>
+          </Select>
         </Form.Item>
       </Col>
       <Col span={24}>
