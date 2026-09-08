@@ -10,7 +10,7 @@ export function IndicatorConfigPage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const topics = visibleTopics(user, state.topics);
-  const editable = canPerform(user.role, 'indicator.manage');
+  const editable = canPerform(user, state.roles, 'indicator.manage');
   const [nodeId, setNodeId] = useState(state.nodes[0]?.id);
   const [draft, setDraft] = useState<Record<string, number>>({});
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);

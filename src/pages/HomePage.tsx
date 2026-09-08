@@ -4,11 +4,14 @@ import { useAppStore } from '../store';
 import { buildTopicSummaries } from '../domain/monitoring';
 import { PageHeader } from '../components/common/PageHeader';
 import { StatusTag } from '../components/common/StatusTag';
+import { canPerform, filterByTopicScope, getRole } from '../domain/permissions';
 
 const { Text } = Typography;
 
 export function HomePage() {
   const state = useAppStore();
+  const user = state.currentUser!;
+  const role = getRole(user, state.roles);
   const summaries = buildTopicSummaries(state.topics, state.indicators, state.achievements, state.currentUser ?? undefined);
   const effective = state.achievements.filter((item) => item.status === '已生效' || item.status === '审批通过').length;
   const reportDone = state.reports.filter((item) => item.status === '已通过').length;
@@ -20,13 +23,15 @@ export function HomePage() {
     科研助理: '重点处理成果、报告和归档初审，并维护课题指标与项目公共材料。',
     课题牵头单位: '请及时办理本课题成果、月季报、国家材料和配套自筹项目归档。',
   };
+  const initialReviewer = canPerform(user, state.roles, 'achievement.initial.approve');
+  const finalReviewer = canPerform(user, state.roles, 'achievement.final.approve');
   const tasks = [
-    ...state.achievements.filter((item) => item.status.includes(state.currentUser?.role === '科研助理' ? '初审中' : '终审中')).slice(0, 3).map((item) => ({ title: item.title, status: item.status, type: '成果审批' })),
-    ...state.reports.filter((item) => item.status.includes(state.currentUser?.role === '科研助理' ? '初审中' : '终审中')).slice(0, 2).map((item) => ({ title: `${item.reportType === 'MONTHLY' ? '月报' : '季报'} · ${state.topics.find((topic) => topic.id === item.topicId)?.name}`, status: item.status, type: '进度报告' })),
+    ...filterByTopicScope(user, state.achievements).filter((item) => (initialReviewer && item.status.includes('初审中')) || (finalReviewer && item.status.includes('终审中'))).slice(0, 3).map((item) => ({ title: item.title, status: item.status, type: '成果审批' })),
+    ...filterByTopicScope(user, state.reports).filter((item) => (canPerform(user, state.roles, 'report.initial.approve') && item.status === '初审中') || (canPerform(user, state.roles, 'report.final.approve') && item.status === '终审中')).slice(0, 2).map((item) => ({ title: `${item.reportType === 'MONTHLY' ? '月报' : '季报'} · ${state.topics.find((topic) => topic.id === item.topicId)?.name}`, status: item.status, type: '进度报告' })),
   ];
 
   return <>
-    <PageHeader title="工作台" description={`${state.currentUser?.name}，欢迎回来。${roleHint[state.currentUser?.role ?? ''] ?? ''}`} />
+    <PageHeader title="工作台" description={`${user.name}，欢迎回来。${roleHint[role?.name ?? ''] ?? `当前角色：${role?.name ?? '未分配'}。`}`} />
     <Alert type="info" showIcon message="本系统管理一个固定重点项目；科研指标、成果和月季报均按课题办理，配套自筹项目仅用于材料归档。" style={{ marginBottom: 20 }} />
     <Row gutter={[16, 16]}>
       {[{ title: '课题数量', value: summaries.length, icon: <RiseOutlined />, color: '#1677ff' }, { title: '生效成果', value: effective, icon: <FileDoneOutlined />, color: '#00a870' }, { title: '已通过报告', value: reportDone, icon: <CheckCircleOutlined />, color: '#7b61ff' }, { title: '已完成归档项', value: archiveDone, icon: <FolderOpenOutlined />, color: '#fa8c16' }, { title: '当前待审批', value: waiting, icon: <ClockCircleOutlined />, color: '#eb2f96' }].map((item) => <Col flex="1 1 190px" key={item.title}><Card className="metric-card"><Space align="start"><div className="metric-icon" style={{ color: item.color, background: `${item.color}15` }}>{item.icon}</div><Statistic title={item.title} value={item.value} /></Space></Card></Col>)}

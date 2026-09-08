@@ -3,7 +3,8 @@ import { Alert, Button, Card, Descriptions, Drawer, Input, Modal, Space, Table, 
 import { CheckOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons';
 import type { Achievement, AchievementWorkflowStatus } from '../../types';
 import { useAppStore } from '../../store';
-import { reviewActionFor } from '../../domain/achievement';
+import type { AchievementAction } from '../../domain/workflows';
+import { canPerform, filterByTopicScope } from '../../domain/permissions';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatusTag } from '../../components/common/StatusTag';
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
@@ -12,16 +13,16 @@ const { Text } = Typography;
 
 export function AchievementApprovalPage() {
   const state = useAppStore();
-  const role = state.currentUser!.role;
+  const user = state.currentUser!;
+  const canInitial = canPerform(user, state.roles, 'achievement.initial.approve');
+  const canFinal = canPerform(user, state.roles, 'achievement.final.approve');
   const [detail, setDetail] = useState<Achievement | null>(null);
   const [opinion, setOpinion] = useState('');
   const [decisionOpen, setDecisionOpen] = useState<'approve' | 'return' | null>(null);
-  const reviewable = useMemo(() => state.achievements.filter((item) => {
-    if (role === '系统管理员') return ['预审初审中', '预审终审中', '正式初审中', '正式终审中'].includes(item.status);
-    return reviewActionFor(item.status as AchievementWorkflowStatus, role) !== null;
-  }), [role, state.achievements]);
+  const reviewable = useMemo(() => filterByTopicScope(user, state.achievements).filter((item) =>
+    (canInitial && ['预审初审中', '正式初审中'].includes(item.status)) || (canFinal && ['预审终审中', '正式终审中'].includes(item.status))), [canFinal, canInitial, state.achievements, user]);
   const topicMap = Object.fromEntries(state.topics.map((topic) => [topic.id, topic.name]));
-  const currentAction = detail ? reviewActionFor(detail.status as AchievementWorkflowStatus, role) : null;
+  const currentAction: AchievementAction | null = detail?.status.includes('初审中') && canInitial ? 'APPROVE_INITIAL' : detail?.status.includes('终审中') && canFinal ? 'APPROVE_FINAL' : null;
   const confirmDecision = () => {
     if (!detail || !currentAction) return;
     if (decisionOpen === 'return' && !opinion.trim()) return message.warning('退回时必须填写审批意见');
@@ -41,7 +42,7 @@ export function AchievementApprovalPage() {
 
   return <>
     <PageHeader title="成果审批" description="预审关注名称、人员和单位排序；正式审批关注认定材料。初审与终审职责分离。" />
-    {role === '系统管理员' && <Alert type="info" showIcon message="系统管理员可查看全部审批页面，但默认不参与业务审批。" style={{ marginBottom: 16 }} />}
+    {!canInitial && !canFinal && <Alert type="info" showIcon message="当前角色可查看审批记录，但没有审批操作权限。" style={{ marginBottom: 16 }} />}
     <Card><Tabs items={[
       { key: 'pre', label: `预审待办（${reviewable.filter((item) => item.status.startsWith('预审')).length}）`, children: list(reviewable.filter((item) => item.status.startsWith('预审'))) },
       { key: 'formal', label: `正式成果待办（${reviewable.filter((item) => item.status.startsWith('正式')).length}）`, children: list(reviewable.filter((item) => item.status.startsWith('正式'))) },

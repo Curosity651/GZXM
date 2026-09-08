@@ -15,8 +15,9 @@ const { Text } = Typography;
 export function ReportManagementPage() {
   const state = useAppStore();
   const user = state.currentUser!;
-  const canSubmit = canPerform(user.role, 'report.submit');
-  const topic = state.topics.find((item) => item.id === user.topicId);
+  const canSubmit = canPerform(user, state.roles, 'report.submit');
+  const primaryTopicId = user.topicIds?.[0] ?? user.topicId;
+  const topic = state.topics.find((item) => item.id === primaryTopicId);
   const [drawer, setDrawer] = useState(false);
   const [editingTask, setEditingTask] = useState<ReportTask | null>(null);
   const [editingReport, setEditingReport] = useState<ProgressReport | null>(null);

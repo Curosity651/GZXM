@@ -1,4 +1,5 @@
 import type { Achievement, AchievementType, IndicatorConfig, Topic, User } from '../types';
+import { filterByTopicScope } from './permissions';
 
 export interface TopicSummary {
   topicId: string;
@@ -16,9 +17,7 @@ export function buildTopicSummaries(
   achievements: Achievement[],
   user?: User,
 ): TopicSummary[] {
-  const visible = user?.role === '课题牵头单位'
-    ? topics.filter((topic) => topic.id === user.topicId)
-    : topics;
+  const visible = user ? filterByTopicScope(user, topics) : topics;
 
   return visible.map((topic) => {
     const targetByType = new Map<AchievementType, number>();

@@ -7,15 +7,18 @@ import { useAppStore } from '../../store';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatusTag } from '../../components/common/StatusTag';
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
+import { canPerform, filterByTopicScope } from '../../domain/permissions';
 
 export function ArchiveApprovalPage() {
   const state = useAppStore();
-  const role = state.currentUser!.role;
+  const user = state.currentUser!;
+  const canInitial = canPerform(user, state.roles, 'archive.initial.approve');
+  const canFinal = canPerform(user, state.roles, 'archive.final.approve');
   const [detail, setDetail] = useState<ArchiveSubmission | null>(null);
   const [decision, setDecision] = useState<'approve' | 'return' | null>(null);
   const [opinion, setOpinion] = useState('');
-  const items = useMemo(() => state.archiveSubmissions.filter((item) => role === '系统管理员' ? ['初审中', '终审中'].includes(item.status) : role === '科研助理' ? item.status === '初审中' : role === '项目技术负责人' ? item.status === '终审中' : false), [role, state.archiveSubmissions]);
-  const action: ArchiveAction | null = detail ? detail.status === '初审中' && role === '科研助理' ? 'APPROVE_INITIAL' : detail.status === '终审中' && role === '项目技术负责人' ? 'APPROVE_FINAL' : null : null;
+  const items = useMemo(() => filterByTopicScope(user, state.archiveSubmissions).filter((item) => (canInitial && item.status === '初审中') || (canFinal && item.status === '终审中')), [canFinal, canInitial, state.archiveSubmissions, user]);
+  const action: ArchiveAction | null = detail ? detail.status === '初审中' && canInitial ? 'APPROVE_INITIAL' : detail.status === '终审中' && canFinal ? 'APPROVE_FINAL' : null : null;
   const requirement = detail ? state.archiveRequirements.find((item) => item.id === detail.requirementId) : undefined;
   const confirm = () => {
     if (!detail || !action) return;
@@ -26,7 +29,7 @@ export function ArchiveApprovalPage() {
   const ownerLabel = (item: ArchiveSubmission) => item.ownerType === 'PROJECT_PUBLIC' ? state.project.name : item.ownerType === 'TOPIC_NATIONAL' ? state.topics.find((topic) => topic.id === item.ownerId)?.name : state.selfFundedProjects.find((project) => project.id === item.ownerId)?.name;
   return <>
     <PageHeader title="归档审批" description="课题材料和自筹项目材料执行两级审批；项目公共材料由科研助理提交后直接终审。" />
-    {role === '系统管理员' && <Alert type="info" showIcon message="系统管理员只读查看，不显示业务审批按钮。" style={{ marginBottom: 16 }} />}
+    {!canInitial && !canFinal && <Alert type="info" showIcon message="当前角色可查看审批记录，但没有审批操作权限。" style={{ marginBottom: 16 }} />}
     <Card><Table rowKey="id" dataSource={items} columns={[
       { title: '材料名称', render: (_, row) => state.archiveRequirements.find((item) => item.id === row.requirementId)?.name ?? row.requirementId },
       { title: '归档对象', render: (_, row) => ownerLabel(row) }, { title: '归档类型', dataIndex: 'ownerType', width: 120, render: (value) => <Tag>{value === 'PROJECT_PUBLIC' ? '项目公共' : value === 'TOPIC_NATIONAL' ? '课题国家' : '配套自筹'}</Tag> },

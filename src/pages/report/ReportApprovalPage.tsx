@@ -7,15 +7,18 @@ import { useAppStore } from '../../store';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatusTag } from '../../components/common/StatusTag';
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
+import { canPerform, filterByTopicScope } from '../../domain/permissions';
 
 export function ReportApprovalPage() {
   const state = useAppStore();
-  const role = state.currentUser!.role;
+  const user = state.currentUser!;
+  const canInitial = canPerform(user, state.roles, 'report.initial.approve');
+  const canFinal = canPerform(user, state.roles, 'report.final.approve');
   const [detail, setDetail] = useState<ProgressReport | null>(null);
   const [decision, setDecision] = useState<'approve' | 'return' | null>(null);
   const [opinion, setOpinion] = useState('');
-  const reviewable = useMemo(() => state.reports.filter((item) => role === '系统管理员' ? ['初审中', '终审中'].includes(item.status) : role === '科研助理' ? item.status === '初审中' : role === '项目技术负责人' ? item.status === '终审中' : false), [role, state.reports]);
-  const approveAction: ReportAction | null = detail ? detail.status === '初审中' && role === '科研助理' ? 'APPROVE_INITIAL' : detail.status === '终审中' && role === '项目技术负责人' ? 'APPROVE_FINAL' : null : null;
+  const reviewable = useMemo(() => filterByTopicScope(user, state.reports).filter((item) => (canInitial && item.status === '初审中') || (canFinal && item.status === '终审中')), [canFinal, canInitial, state.reports, user]);
+  const approveAction: ReportAction | null = detail ? detail.status === '初审中' && canInitial ? 'APPROVE_INITIAL' : detail.status === '终审中' && canFinal ? 'APPROVE_FINAL' : null : null;
   const confirm = () => {
     if (!detail || !approveAction) return;
     if (decision === 'return' && !opinion.trim()) return message.warning('退回时必须填写审批意见');
@@ -24,7 +27,7 @@ export function ReportApprovalPage() {
   };
   return <>
     <PageHeader title="月季报审批" description="科研助理初审，项目技术负责人终审；终审通过后纳入项目进度统计。" />
-    {role === '系统管理员' && <Alert showIcon type="info" message="系统管理员当前为只读查看，不显示业务审批操作。" style={{ marginBottom: 16 }} />}
+    {!canInitial && !canFinal && <Alert showIcon type="info" message="当前角色可查看审批记录，但没有审批操作权限。" style={{ marginBottom: 16 }} />}
     <Card><Table rowKey="id" dataSource={reviewable} columns={[
       { title: '报告', render: (_, row) => <Space><Tag color={row.reportType === 'MONTHLY' ? 'blue' : 'purple'}>{row.reportType === 'MONTHLY' ? '月报' : '季报'}</Tag>{state.topics.find((item) => item.id === row.topicId)?.name}</Space> },
       { title: '状态', dataIndex: 'status', width: 120, render: (value) => <StatusTag status={value} /> },

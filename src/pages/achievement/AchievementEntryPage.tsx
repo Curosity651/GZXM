@@ -14,15 +14,19 @@ type FormValues = Partial<Achievement> & { uploads?: UploadFile[] };
 export function AchievementEntryPage() {
   const state = useAppStore();
   const user = state.currentUser!;
-  const canSubmit = canPerform(user.role, 'achievement.submit');
-  const topic = state.topics.find((item) => item.id === user.topicId);
+  const canSubmit = canPerform(user, state.roles, 'achievement.submit');
+  const primaryTopicId = user.topicIds?.[0] ?? user.topicId;
+  const topic = state.topics.find((item) => item.id === primaryTopicId);
   const [form] = Form.useForm<FormValues>();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Achievement | null>(null);
   const type = Form.useWatch('achievementType', form) as AchievementType | undefined;
+  const selectedTopicId = Form.useWatch('topicId', form) ?? primaryTopicId;
+  const availableTopics = filterByTopicScope(user, state.topics);
+  const selectedTopic = state.topics.find((item) => item.id === selectedTopicId);
   const achievements = useMemo(() => filterByTopicScope(user, state.achievements), [state.achievements, user]);
 
-  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ achievementType: '学术论文', responsiblePerson: topic?.principalName, projectLabeling: `${state.project.name}（${state.project.code}）` }); setOpen(true); };
+  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ topicId: primaryTopicId, achievementType: '学术论文', responsiblePerson: topic?.principalName, projectLabeling: `${state.project.name}（${state.project.code}）` }); setOpen(true); };
   const openEdit = (item: Achievement) => { setEditing(item); form.setFieldsValue(item); setOpen(true); };
   const save = async () => {
     const values = await form.validateFields();
@@ -30,9 +34,9 @@ export function AchievementEntryPage() {
     if (editing) state.updateAchievement(editing.id, values);
     else {
       const selectedType = values.achievementType!;
-      const indicator = state.indicators.find((item) => item.topicId === user.topicId && item.achievementType === selectedType);
+      const indicator = state.indicators.find((item) => item.topicId === selectedTopicId && item.achievementType === selectedType);
       state.addAchievement({
-        id: `ach-${Date.now()}`, projectId: state.project.id, topicId: user.topicId!, unitId: topic?.leadingUnitId ?? '',
+        id: `ach-${Date.now()}`, projectId: state.project.id, topicId: selectedTopicId!, unitId: selectedTopic?.leadingUnitId ?? '',
         achievementType: selectedType, indicatorId: indicator?.id ?? '', nodeId: indicator?.nodeId ?? state.nodes[0]?.id,
         title: values.title!, responsiblePerson: values.responsiblePerson!, progressStatus: values.progressStatus ?? '',
         plannedCompletionDate: values.plannedCompletionDate, status: initialAchievementStatus(selectedType), countsToIndicator: false,
@@ -68,6 +72,7 @@ export function AchievementEntryPage() {
     ]} /></Card>
     <Drawer size={720} title={editing ? '编辑成果' : '新增成果'} open={open} onClose={() => setOpen(false)} extra={<Space><Button onClick={() => setOpen(false)}>取消</Button><Button type="primary" onClick={save}>保存草稿</Button></Space>}>
       <Form form={form} layout="vertical">
+        <Form.Item label="所属课题" name="topicId" rules={[{ required: true }]}><Select disabled={Boolean(editing)} options={availableTopics.map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} /></Form.Item>
         <Row gutter={16}><Col span={12}><Form.Item label="成果类型" name="achievementType" rules={[{ required: true }]}><Select disabled={Boolean(editing)} options={ACHIEVEMENT_TYPES.map((item) => ({ label: item, value: item }))} /></Form.Item></Col><Col span={12}><Form.Item label="负责人" name="responsiblePerson" rules={[{ required: true }]}><Input /></Form.Item></Col></Row>
         <Form.Item label="成果名称" name="title" rules={[{ required: true, message: '请输入成果名称' }]}><Input placeholder="预审通过后，名称变更需要重新提交审批" /></Form.Item>
         <Row gutter={16}><Col span={12}><Form.Item label="当前进度" name="progressStatus" rules={[{ required: true }]}><Input placeholder="例如：拟投稿、材料准备中" /></Form.Item></Col><Col span={12}><Form.Item label="计划完成日期" name="plannedCompletionDate"><Input type="date" /></Form.Item></Col></Row>

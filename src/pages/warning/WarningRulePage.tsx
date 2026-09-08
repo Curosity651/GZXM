@@ -7,7 +7,7 @@ const { Text } = Typography;
 
 export function WarningRulePage() {
   const state = useAppStore();
-  const editable = canPerform(state.currentUser!.role, 'warning.manage');
+  const editable = canPerform(state.currentUser!, state.roles, 'warning.manage');
   return <>
     <PageHeader title="预警规则配置" description="科研助理维护黄、橙、红三级阈值；其他角色仅查看。" />
     <Card><Table rowKey="id" pagination={false} dataSource={state.warningRules} columns={[

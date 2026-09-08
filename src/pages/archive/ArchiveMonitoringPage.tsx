@@ -6,7 +6,7 @@ import { archiveCompletion } from '../../domain/archive';
 export function ArchiveMonitoringPage() {
   const state = useAppStore();
   const user = state.currentUser!;
-  const topicIds = user.role === '课题牵头单位' ? [user.topicId!] : state.topics.map((item) => item.id);
+  const topicIds = user.dataScope === 'TOPICS' ? (user.topicIds ?? []) : state.topics.map((item) => item.id);
   const publicReqs = state.archiveRequirements.filter((item) => item.ownerType === 'PROJECT_PUBLIC');
   const topicReqs = state.archiveRequirements.filter((item) => item.ownerType === 'TOPIC_NATIONAL');
   const publicStats = archiveCompletion(publicReqs, state.archiveSubmissions.filter((item) => item.ownerType === 'PROJECT_PUBLIC'));
