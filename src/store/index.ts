@@ -1,18 +1,21 @@
 import { create } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { persist } from 'zustand/middleware';
+import type { StateCreator } from 'zustand';
 import type {
-  Achievement, ArchiveCategory, ArchiveMaterial, ArchiveRequirement,
-  IndicatorConfig, Project,
-  ProjectUnit, TimeNode, Topic, TopicPowerGridRequirement, WarningRule, User, UserRole,
+  Achievement, ApprovalRecord, ArchiveCategory, ArchiveMaterial, ArchiveRequirement, ArchiveSubmission,
+  IndicatorConfig, ProgressReport, Project, ProjectUnit, ReportTask, SelfFundedProject, TimeNode, Topic,
+  TopicPowerGridRequirement, User, UserRole, WarningRule,
 } from '../types';
 import {
-  MOCK_ACHIEVEMENTS, MOCK_ARCHIVE_CATEGORIES, MOCK_ARCHIVE_MATERIALS, MOCK_ARCHIVE_REQUIREMENTS,
-  MOCK_INDICATORS,
-  MOCK_PROJECT, MOCK_TIME_NODES, MOCK_TOPICS, MOCK_UNITS, MOCK_WARNING_RULES,
-  MOCK_USERS, MOCK_TOPIC_POWER_GRID_REQUIREMENTS,
+  MOCK_ACHIEVEMENTS, MOCK_APPROVAL_RECORDS, MOCK_ARCHIVE_CATEGORIES, MOCK_ARCHIVE_MATERIALS,
+  MOCK_ARCHIVE_REQUIREMENTS, MOCK_ARCHIVE_SUBMISSIONS, MOCK_INDICATORS, MOCK_PROJECT, MOCK_REPORTS,
+  MOCK_REPORT_TASKS, MOCK_SELF_FUNDED_PROJECTS, MOCK_TIME_NODES, MOCK_TOPICS,
+  MOCK_TOPIC_POWER_GRID_REQUIREMENTS, MOCK_UNITS, MOCK_USERS, MOCK_WARNING_RULES, MOCK_WORKFLOW_ACHIEVEMENTS,
 } from '../data/mock';
+import { nextAchievementStatus, type AchievementAction } from '../domain/workflows';
 
-export interface AppState {
+export interface AppData {
   project: Project;
   units: ProjectUnit[];
   topics: Topic[];
@@ -20,40 +23,34 @@ export interface AppState {
   indicators: IndicatorConfig[];
   warningRules: WarningRule[];
   achievements: Achievement[];
+  approvalRecords: ApprovalRecord[];
+  reportTasks: ReportTask[];
+  reports: ProgressReport[];
+  selfFundedProjects: SelfFundedProject[];
   archiveCategories: ArchiveCategory[];
   archiveMaterials: ArchiveMaterial[];
   archiveRequirements: ArchiveRequirement[];
+  archiveSubmissions: ArchiveSubmission[];
   topicPowerGridRequirements: TopicPowerGridRequirement[];
-
-  // Auth
   users: User[];
   currentUser: User | null;
+}
 
-  // Unit CRUD
+export interface AppState extends AppData {
   addUnit: (unit: ProjectUnit) => void;
   updateUnit: (id: string, updates: Partial<ProjectUnit>) => void;
   removeUnit: (id: string) => void;
-
-  // Topic CRUD
   addTopic: (topic: Topic) => void;
   updateTopic: (id: string, updates: Partial<Topic>) => void;
   removeTopic: (id: string) => void;
-
-  // Node CRUD
   addNode: (node: TimeNode) => void;
   updateNode: (id: string, updates: Partial<TimeNode>) => void;
   removeNode: (id: string) => void;
-
-  // Indicator CRUD
   addIndicator: (indicator: IndicatorConfig) => void;
   updateIndicator: (id: string, updates: Partial<IndicatorConfig>) => void;
   removeIndicator: (id: string) => void;
   batchUpdateIndicators: (updates: { id: string; plannedQuantity: number }[]) => void;
-
-  // Warning rules
   updateWarningRule: (id: string, updates: Partial<WarningRule>) => void;
-
-  // Achievement CRUD
   addAchievement: (achievement: Achievement) => void;
   updateAchievement: (id: string, updates: Partial<Achievement>) => void;
   lockAchievement: (id: string) => void;
@@ -61,8 +58,7 @@ export interface AppState {
   approveAchievement: (id: string, payload: Partial<Achievement>, approver: string) => void;
   rejectAchievement: (id: string, reason: string, approver: string) => void;
   returnAchievement: (id: string, reason: string, approver: string) => void;
-
-  // Archive CRUD
+  reviewAchievement: (id: string, action: AchievementAction, operatorId: string, opinion: string) => void;
   addArchiveCategory: (category: ArchiveCategory) => void;
   updateArchiveCategory: (id: string, updates: Partial<ArchiveCategory>) => void;
   removeArchiveCategory: (id: string) => void;
@@ -72,139 +68,144 @@ export interface AppState {
   addArchiveRequirement: (req: ArchiveRequirement) => void;
   updateArchiveRequirement: (id: string, updates: Partial<ArchiveRequirement>) => void;
   removeArchiveRequirement: (id: string) => void;
-
-  // Power grid
   addPowerGridReq: (req: TopicPowerGridRequirement) => void;
   updatePowerGridReq: (id: string, updates: Partial<TopicPowerGridRequirement>) => void;
   removePowerGridReq: (id: string) => void;
-
-  // Auth actions
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-
-  // User CRUD
   addUser: (user: User) => void;
   updateUser: (id: string, updates: Partial<User>) => void;
   removeUser: (id: string) => void;
   resetUserPassword: (id: string) => void;
   toggleUserEnabled: (id: string, enabled: boolean) => void;
-
-  // Reset
   resetToMock: () => void;
 }
 
-const buildInitialState = () => ({
-  project: MOCK_PROJECT,
-  units: MOCK_UNITS,
-  topics: MOCK_TOPICS,
-  nodes: MOCK_TIME_NODES,
-  indicators: MOCK_INDICATORS,
-  warningRules: MOCK_WARNING_RULES,
-  achievements: MOCK_ACHIEVEMENTS,
-  archiveCategories: MOCK_ARCHIVE_CATEGORIES,
-  archiveMaterials: MOCK_ARCHIVE_MATERIALS,
-  archiveRequirements: MOCK_ARCHIVE_REQUIREMENTS,
-  topicPowerGridRequirements: MOCK_TOPIC_POWER_GRID_REQUIREMENTS,
-  users: MOCK_USERS,
-  currentUser: null as User | null,
+export function createInitialState(): AppData {
+  return structuredClone({
+    project: MOCK_PROJECT,
+    units: MOCK_UNITS,
+    topics: MOCK_TOPICS,
+    nodes: MOCK_TIME_NODES,
+    indicators: MOCK_INDICATORS,
+    warningRules: MOCK_WARNING_RULES,
+    achievements: [...MOCK_ACHIEVEMENTS, ...MOCK_WORKFLOW_ACHIEVEMENTS],
+    approvalRecords: MOCK_APPROVAL_RECORDS,
+    reportTasks: MOCK_REPORT_TASKS,
+    reports: MOCK_REPORTS,
+    selfFundedProjects: MOCK_SELF_FUNDED_PROJECTS,
+    archiveCategories: MOCK_ARCHIVE_CATEGORIES,
+    archiveMaterials: MOCK_ARCHIVE_MATERIALS,
+    archiveRequirements: MOCK_ARCHIVE_REQUIREMENTS,
+    archiveSubmissions: MOCK_ARCHIVE_SUBMISSIONS,
+    topicPowerGridRequirements: MOCK_TOPIC_POWER_GRID_REQUIREMENTS,
+    users: MOCK_USERS,
+    currentUser: null,
+  });
+}
+
+export function visibleTopics(user: User, topics: Topic[]): Topic[] {
+  return user.role === '课题牵头单位' ? topics.filter((topic) => topic.id === user.topicId) : topics;
+}
+
+const stateCreator: StateCreator<AppState> = (set, get) => ({
+  ...createInitialState(),
+  addUnit: (unit) => set((state) => ({ units: [...state.units, unit] })),
+  updateUnit: (id, updates) => set((state) => ({ units: state.units.map((unit) => unit.id === id ? { ...unit, ...updates } : unit) })),
+  removeUnit: (id) => set((state) => ({ units: state.units.filter((unit) => unit.id !== id) })),
+  addTopic: (topic) => set((state) => ({ topics: [...state.topics, topic] })),
+  updateTopic: (id, updates) => set((state) => ({ topics: state.topics.map((topic) => topic.id === id ? { ...topic, ...updates } : topic) })),
+  removeTopic: (id) => set((state) => ({ topics: state.topics.filter((topic) => topic.id !== id) })),
+  addNode: (node) => set((state) => ({ nodes: [...state.nodes, node] })),
+  updateNode: (id, updates) => set((state) => ({ nodes: state.nodes.map((node) => node.id === id ? { ...node, ...updates } : node) })),
+  removeNode: (id) => set((state) => ({ nodes: state.nodes.filter((node) => node.id !== id) })),
+  addIndicator: (indicator) => set((state) => ({ indicators: [...state.indicators, indicator] })),
+  updateIndicator: (id, updates) => set((state) => ({ indicators: state.indicators.map((indicator) => indicator.id === id ? { ...indicator, ...updates, updatedAt: today() } : indicator) })),
+  removeIndicator: (id) => set((state) => ({ indicators: state.indicators.filter((indicator) => indicator.id !== id) })),
+  batchUpdateIndicators: (updates) => set((state) => {
+    const quantities = new Map(updates.map((item) => [item.id, item.plannedQuantity]));
+    return { indicators: state.indicators.map((indicator) => quantities.has(indicator.id) ? { ...indicator, plannedQuantity: quantities.get(indicator.id)!, updatedAt: today() } : indicator) };
+  }),
+  updateWarningRule: (id, updates) => set((state) => ({ warningRules: state.warningRules.map((rule) => rule.id === id ? { ...rule, ...updates } : rule) })),
+  addAchievement: (achievement) => set((state) => ({ achievements: [...state.achievements, achievement] })),
+  updateAchievement: (id, updates) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, ...updates, updatedAt: today() } : achievement) })),
+  lockAchievement: (id) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '已提交', submittedAt: today(), updatedAt: today() } : achievement) })),
+  submitAchievement: (id) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '已提交', submittedAt: today(), updatedAt: today() } : achievement) })),
+  approveAchievement: (id, payload, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, ...payload, status: '审批通过', countsToIndicator: true, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
+  rejectAchievement: (id, reason, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '审批不通过', countsToIndicator: false, approvalOpinion: reason, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
+  returnAchievement: (id, reason, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '退回修改', countsToIndicator: false, approvalOpinion: reason, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
+  reviewAchievement: (id, action, operatorId, opinion) => {
+    const current = get().achievements.find((achievement) => achievement.id === id);
+    if (!current) throw new Error('成果不存在');
+    const operator = get().users.find((user) => user.id === operatorId);
+    if (!operator) throw new Error('审批人不存在');
+    if (action === 'APPROVE_INITIAL' && operator.role !== '科研助理') throw new Error('仅科研助理可以初审');
+    if (action === 'APPROVE_FINAL' && operator.role !== '项目技术负责人') throw new Error('仅项目技术负责人可以终审');
+    const workflowStatuses = ['预审草稿', '预审初审中', '预审终审中', '预审退回', '预审通过', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', '已生效'];
+    if (!workflowStatuses.includes(current.status)) throw new Error('该成果仍使用旧版流程，不能执行新版审批');
+    const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
+    const record: ApprovalRecord = {
+      id: `approval-${Date.now()}-${id}`,
+      businessType: 'ACHIEVEMENT', businessId: id,
+      stage: current.status.startsWith('预审') ? 'PRE_REVIEW' : 'FORMAL',
+      level: action === 'APPROVE_FINAL' ? 'FINAL' : 'INITIAL',
+      decision: action === 'RETURN' ? 'RETURNED' : 'APPROVED',
+      opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: 1,
+    };
+    set((state) => ({
+      achievements: state.achievements.map((achievement) => achievement.id === id ? {
+        ...achievement, status: nextStatus, countsToIndicator: nextStatus === '已生效', updatedAt: today(),
+        approvalOpinion: opinion, approver: operator.name, approvedAt: today(),
+      } : achievement),
+      approvalRecords: [...state.approvalRecords, record],
+    }));
+  },
+  addArchiveCategory: (category) => set((state) => ({ archiveCategories: [...state.archiveCategories, category] })),
+  updateArchiveCategory: (id, updates) => set((state) => ({ archiveCategories: state.archiveCategories.map((category) => category.id === id ? { ...category, ...updates } : category) })),
+  removeArchiveCategory: (id) => set((state) => ({ archiveCategories: state.archiveCategories.filter((category) => category.id !== id) })),
+  addArchiveMaterial: (material) => set((state) => ({ archiveMaterials: [...state.archiveMaterials, material] })),
+  updateArchiveMaterial: (id, updates) => set((state) => ({ archiveMaterials: state.archiveMaterials.map((material) => material.id === id ? { ...material, ...updates } : material) })),
+  removeArchiveMaterial: (id) => set((state) => ({ archiveMaterials: state.archiveMaterials.filter((material) => material.id !== id) })),
+  addArchiveRequirement: (requirement) => set((state) => ({ archiveRequirements: [...state.archiveRequirements, requirement] })),
+  updateArchiveRequirement: (id, updates) => set((state) => ({ archiveRequirements: state.archiveRequirements.map((requirement) => requirement.id === id ? { ...requirement, ...updates } : requirement) })),
+  removeArchiveRequirement: (id) => set((state) => ({ archiveRequirements: state.archiveRequirements.filter((requirement) => requirement.id !== id) })),
+  addPowerGridReq: (requirement) => set((state) => ({ topicPowerGridRequirements: [...state.topicPowerGridRequirements, requirement] })),
+  updatePowerGridReq: (id, updates) => set((state) => ({ topicPowerGridRequirements: state.topicPowerGridRequirements.map((requirement) => requirement.id === id ? { ...requirement, ...updates } : requirement) })),
+  removePowerGridReq: (id) => set((state) => ({ topicPowerGridRequirements: state.topicPowerGridRequirements.filter((requirement) => requirement.id !== id) })),
+  login: async (username, password) => {
+    const user = get().users.find((item) => item.username === username && item.password === password);
+    if (!user) return { success: false, error: '用户名或密码错误' };
+    if (!user.enabled) return { success: false, error: '该账号已被禁用' };
+    const updatedUser = { ...user, lastLoginAt: today() };
+    set((state) => ({ currentUser: updatedUser, users: state.users.map((item) => item.id === user.id ? updatedUser : item) }));
+    return { success: true };
+  },
+  logout: () => set({ currentUser: null }),
+  addUser: (user) => set((state) => ({ users: [...state.users, user] })),
+  updateUser: (id, updates) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, ...updates } : user) })),
+  removeUser: (id) => set((state) => ({ users: state.users.filter((user) => user.id !== id) })),
+  resetUserPassword: (id) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, password: '123456' } : user) })),
+  toggleUserEnabled: (id, enabled) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, enabled } : user) })),
+  resetToMock: () => set(createInitialState()),
 });
 
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function createAppStore() {
+  return createStore<AppState>()(stateCreator);
+}
+
 export const useAppStore = create<AppState>()(
-  persist(
-    (set, get) => ({
-      ...buildInitialState(),
-
-      addUnit: (unit) => set((s) => ({ units: [...s.units, unit] })),
-      updateUnit: (id, updates) => set((s) => ({ units: s.units.map((u) => (u.id === id ? { ...u, ...updates } : u)) })),
-      removeUnit: (id) => set((s) => ({ units: s.units.filter((u) => u.id !== id) })),
-
-      addTopic: (topic) => set((s) => ({ topics: [...s.topics, topic] })),
-      updateTopic: (id, updates) => set((s) => ({ topics: s.topics.map((t) => (t.id === id ? { ...t, ...updates } : t)) })),
-      removeTopic: (id) => set((s) => ({ topics: s.topics.filter((t) => t.id !== id) })),
-
-      addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
-      updateNode: (id, updates) => set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...updates } : n)) })),
-      removeNode: (id) => set((s) => ({ nodes: s.nodes.filter((n) => n.id !== id) })),
-
-      addIndicator: (indicator) => set((s) => ({ indicators: [...s.indicators, indicator] })),
-      updateIndicator: (id, updates) => set((s) => ({
-        indicators: s.indicators.map((i) => (i.id === id ? { ...i, ...updates, updatedAt: new Date().toISOString().split('T')[0] } : i)),
-      })),
-      removeIndicator: (id) => set((s) => ({ indicators: s.indicators.filter((i) => i.id !== id) })),
-      batchUpdateIndicators: (updates) => set((s) => {
-        const map = new Map(updates.map((u) => [u.id, u.plannedQuantity]));
-        const today = new Date().toISOString().split('T')[0];
-        return { indicators: s.indicators.map((i) => map.has(i.id) ? { ...i, plannedQuantity: map.get(i.id)!, updatedAt: today } : i) };
-      }),
-
-      updateWarningRule: (id, updates) => set((s) => ({ warningRules: s.warningRules.map((r) => (r.id === id ? { ...r, ...updates } : r)) })),
-
-      addAchievement: (achievement) => set((s) => ({ achievements: [...s.achievements, achievement] })),
-      updateAchievement: (id, updates) => set((s) => ({ achievements: s.achievements.map((a) => (a.id === id ? { ...a, ...updates, updatedAt: new Date().toISOString().split('T')[0] } : a)) })),
-      lockAchievement: (id) => set((s) => ({ achievements: s.achievements.map((a) => (a.id === id ? { ...a, status: '已提交' as const, submittedAt: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString().split('T')[0] } : a)) })),
-      submitAchievement: (id) => set((s) => ({ achievements: s.achievements.map((a) => (a.id === id ? { ...a, status: '已提交' as const, submittedAt: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString().split('T')[0] } : a)) })),
-      approveAchievement: (id, payload, approver) => { const today = new Date().toISOString().split('T')[0]; set((s) => ({ achievements: s.achievements.map((a) => (a.id === id ? { ...a, ...payload, status: '审批通过' as const, approver, approvedAt: today, updatedAt: today } : a)) })); },
-      rejectAchievement: (id, reason, approver) => { const today = new Date().toISOString().split('T')[0]; set((s) => ({ achievements: s.achievements.map((a) => (a.id === id ? { ...a, status: '审批不通过' as const, approvalOpinion: reason, approver, approvedAt: today, updatedAt: today, countsToIndicator: false } : a)) })); },
-      returnAchievement: (id, reason, approver) => { const today = new Date().toISOString().split('T')[0]; set((s) => ({ achievements: s.achievements.map((a) => (a.id === id ? { ...a, status: '退回修改' as const, approvalOpinion: reason, approver, approvedAt: today, updatedAt: today, countsToIndicator: false } : a)) })); },
-
-      addArchiveCategory: (c) => set((s) => ({ archiveCategories: [...s.archiveCategories, c] })),
-      updateArchiveCategory: (id, u) => set((s) => ({ archiveCategories: s.archiveCategories.map((c) => (c.id === id ? { ...c, ...u } : c)) })),
-      removeArchiveCategory: (id) => set((s) => ({ archiveCategories: s.archiveCategories.filter((c) => c.id !== id) })),
-      addArchiveMaterial: (m) => set((s) => ({ archiveMaterials: [...s.archiveMaterials, m] })),
-      updateArchiveMaterial: (id, u) => set((s) => ({ archiveMaterials: s.archiveMaterials.map((m) => (m.id === id ? { ...m, ...u } : m)) })),
-      removeArchiveMaterial: (id) => set((s) => ({ archiveMaterials: s.archiveMaterials.filter((m) => m.id !== id) })),
-      addArchiveRequirement: (r) => set((s) => ({ archiveRequirements: [...s.archiveRequirements, r] })),
-      updateArchiveRequirement: (id, u) => set((s) => ({ archiveRequirements: s.archiveRequirements.map((r) => (r.id === id ? { ...r, ...u } : r)) })),
-      removeArchiveRequirement: (id) => set((s) => ({ archiveRequirements: s.archiveRequirements.filter((r) => r.id !== id) })),
-
-      addPowerGridReq: (req) => set((s) => ({ topicPowerGridRequirements: [...s.topicPowerGridRequirements, req] })),
-      updatePowerGridReq: (id, updates) => set((s) => ({ topicPowerGridRequirements: s.topicPowerGridRequirements.map((r) => (r.id === id ? { ...r, ...updates } : r)) })),
-      removePowerGridReq: (id) => set((s) => ({ topicPowerGridRequirements: s.topicPowerGridRequirements.filter((r) => r.id !== id) })),
-
-      // Auth actions
-      login: async (username: string, password: string) => {
-        const state = get();
-        const user = state.users.find((u) => u.username === username && u.password === password);
-        if (!user) {
-          return { success: false, error: '用户名或密码错误' };
-        }
-        if (!user.enabled) {
-          return { success: false, error: '该账号已被禁用' };
-        }
-        const updatedUser = { ...user, lastLoginAt: new Date().toISOString().split('T')[0] };
-        set((s) => ({
-          currentUser: updatedUser,
-          users: s.users.map((u) => (u.id === user.id ? updatedUser : u)),
-        }));
-        return { success: true };
-      },
-      logout: () => set({ currentUser: null }),
-
-      // User CRUD
-      addUser: (user) => set((s) => ({ users: [...s.users, user] })),
-      updateUser: (id, updates) => set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, ...updates } : u)) })),
-      removeUser: (id) => set((s) => ({ users: s.users.filter((u) => u.id !== id) })),
-      resetUserPassword: (id) => set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, password: '123456' } : u)) })),
-      toggleUserEnabled: (id, enabled) => set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, enabled } : u)) })),
-
-      resetToMock: () => set(buildInitialState()),
-    }),
-    { name: 'research-achievement-storage-v6' }
-  )
+  persist(stateCreator, { name: 'gzxm-research-management-v1', version: 1 }),
 );
 
-export const canEditAchievement = (status: string): boolean => {
-  return status === '草稿' || status === '退回修改';
-};
+export const canEditAchievement = (status: string): boolean => ['草稿', '退回修改', '预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(status);
 
 export const canAccess = (role: UserRole, module: string): boolean => {
-  const access: Record<UserRole, string[]> = {
-    '系统管理员': ['all'],
-    '项目管理人员': ['research', 'archive', 'monitoring'],
-    '课题用户': ['achievement-entry', 'monitoring'],
-    '成果审批人员': ['achievement-approval', 'monitoring'],
-  };
-  const allowed = access[role] || [];
-  if (allowed.includes('all')) return true;
-  return allowed.includes(module);
+  if (role === '系统管理员') return true;
+  if (role === '项目技术负责人' || role === '科研助理') return ['research', 'archive', 'monitoring'].includes(module);
+  if (role === '课题牵头单位') return ['research', 'archive', 'monitoring', 'achievement-entry'].includes(module);
+  return false;
 };

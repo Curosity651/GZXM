@@ -1,7 +1,7 @@
 import type {
   Achievement, AchievementMaterial, ArchiveCategory, ArchiveMaterial, ArchiveRequirement,
-  IndicatorConfig, Project, ProjectUnit,
-  TimeNode, Topic, WarningRule, User,
+  IndicatorConfig, Project, ProjectUnit, ApprovalRecord, ReportTask, ProgressReport,
+  SelfFundedProject, ArchiveSubmission, TimeNode, Topic, WarningRule, User,
 } from '../types';
 
 export const MOCK_PROJECT: Project = { id: 'p1', name: '国家科技重大专项示范', code: 'GZ-2025-001', startDate: '2025-01-01', endDate: '2028-12-31' };
@@ -183,11 +183,34 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
   },
 ];
 
+export const MOCK_WORKFLOW_ACHIEVEMENTS: Achievement[] = [
+  {
+    id: 'ach-pre-review', projectId: 'p1', topicId: 't1', unitId: 'u-tsinghua', achievementType: '学术论文',
+    indicatorId: 'ind-1', nodeId: 'node-3', title: '面向新型电力系统的协同控制方法', responsiblePerson: '张三',
+    progressStatus: '拟投稿', plannedCompletionDate: '2027-03-01', status: '预审初审中', countsToIndicator: false,
+    createdAt: '2026-08-20', updatedAt: '2026-09-01', submittedAt: '2026-09-01', remarks: '请核对作者及单位排序',
+    firstAuthor: '张三', firstAuthorUnit: '清华大学', signingUnitList: '清华大学、广西电网有限责任公司',
+    projectLabeling: '国家科技重大专项 GZ-2025-001', materials: [],
+  },
+  {
+    id: 'ach-formal-final', projectId: 'p1', topicId: 't2', unitId: 'u-pku', achievementType: '发明专利',
+    indicatorId: 'ind-3', nodeId: 'node-3', title: '一种电网状态智能感知方法', responsiblePerson: '王五',
+    progressStatus: '已受理', plannedCompletionDate: '2027-03-01', recognizedCompletionDate: '2026-08-28',
+    status: '正式终审中', countsToIndicator: false, createdAt: '2026-04-10', updatedAt: '2026-09-02',
+    submittedAt: '2026-09-02', remarks: '', applicationNumber: 'CN202610000001.0',
+    applicantList: '北京大学、广西电网有限责任公司', inventorList: '王五、赵六', materials: [],
+  },
+];
+
 export const MOCK_USERS: User[] = [
   { id: 'user-admin', username: 'admin', password: 'admin123', name: '系统管理员', unitId: 'u-sgcc', phone: '13800000001', email: 'admin@sgcc.com.cn', role: '系统管理员', enabled: true, createdAt: '2025-01-01', lastLoginAt: '2025-06-01' },
-  { id: 'user-pm', username: 'pm', password: 'pm123', name: '项目管理员', unitId: 'u-sgcc', phone: '13800000002', email: 'pm@sgcc.com.cn', role: '项目管理人员', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic', username: 'topic', password: 'topic123', name: '课题用户', unitId: 'u-tsinghua', phone: '13800000003', email: 'topic@tsinghua.edu.cn', role: '课题用户', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-reviewer', username: 'reviewer', password: 'reviewer123', name: '审批人员', unitId: 'u-sgcc', phone: '13800000004', email: 'reviewer@sgcc.com.cn', role: '成果审批人员', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-leader', username: 'leader', password: 'leader123', name: '项目技术负责人', unitId: 'u-sgcc', phone: '13800000002', email: 'leader@sgcc.com.cn', role: '项目技术负责人', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-assistant', username: 'assistant', password: 'assistant123', name: '科研助理（董）', unitId: 'u-sgcc', phone: '13800000003', email: 'assistant@sgcc.com.cn', role: '科研助理', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-1', username: 'topic01', password: 'topic123', name: '课题一牵头单位', unitId: 'u-tsinghua', topicId: 't1', phone: '13800000101', email: 'topic01@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-2', username: 'topic02', password: 'topic123', name: '课题二牵头单位', unitId: 'u-pku', topicId: 't2', phone: '13800000102', email: 'topic02@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-3', username: 'topic03', password: 'topic123', name: '课题三牵头单位', unitId: 'u-ict', topicId: 't3', phone: '13800000103', email: 'topic03@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-4', username: 'topic04', password: 'topic123', name: '课题四牵头单位', unitId: 'u-sgcc', topicId: 't4', phone: '13800000104', email: 'topic04@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-5', username: 'topic05', password: 'topic123', name: '课题五牵头单位', unitId: 'u-hust', topicId: 't5', phone: '13800000105', email: 'topic05@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
 ];
 
 export const MOCK_ARCHIVE_CATEGORIES: ArchiveCategory[] = [
@@ -210,4 +233,32 @@ export const MOCK_ARCHIVE_MATERIALS: ArchiveMaterial[] = [
   { id: 'am-2', projectId: 'p1', categoryId: 'ac-3', requirementId: 'ar-4', name: '发明专利授权证书', fileName: 'patent_ach-4.pdf', sourceAchievementId: 'ach-4', uploader: '张三', uploadedAt: '2025-04-21', remarks: '', versions: [{ id: 'av-2-1', archiveMaterialId: 'am-2', version: 1, fileName: 'patent_ach-4.pdf', fileUrl: 'mock://files/patent_ach-4.pdf', uploadedAt: '2025-04-21', uploader: '张三' }] },
   { id: 'am-3', projectId: 'p1', categoryId: 'ac-4', requirementId: 'ar-5', name: '中期检查汇报PPT', fileName: 'midterm_report.pptx', uploader: '管理员A', uploadedAt: '2025-06-25', remarks: '', versions: [{ id: 'av-3-1', archiveMaterialId: 'am-3', version: 1, fileName: 'midterm_report.pptx', fileUrl: 'mock://files/midterm_report.pptx', uploadedAt: '2025-06-25', uploader: '管理员A' }] },
   { id: 'am-4', projectId: 'p1', categoryId: 'ac-1', requirementId: 'ar-1', name: '项目任务书', fileName: 'task_book.pdf', uploader: '管理员A', uploadedAt: '2025-01-05', remarks: '', versions: [{ id: 'av-4-1', archiveMaterialId: 'am-4', version: 1, fileName: 'task_book.pdf', fileUrl: 'mock://files/task_book.pdf', uploadedAt: '2025-01-05', uploader: '管理员A' }] },
+];
+
+export const MOCK_APPROVAL_RECORDS: ApprovalRecord[] = [];
+
+export const MOCK_REPORT_TASKS: ReportTask[] = MOCK_TOPICS.flatMap((topic) => ([
+  { id: `report-task-m-${topic.id}`, topicId: topic.id, reportType: 'MONTHLY', year: 2026, period: 9, deadline: '2026-09-30' },
+  { id: `report-task-q-${topic.id}`, topicId: topic.id, reportType: 'QUARTERLY', year: 2026, period: 3, deadline: '2026-09-10' },
+]));
+
+export const MOCK_REPORTS: ProgressReport[] = [
+  {
+    id: 'report-t1-sep', taskId: 'report-task-m-t1', topicId: 't1', reportType: 'MONTHLY',
+    milestoneProgress: '完成总体架构评审，里程碑按计划推进。', overallProgress: '完成关键技术方案论证和原型验证。',
+    demonstrationProgress: '完成示范场景调研。', fundUsage: '本期支出 18 万元，累计支出 126 万元。',
+    nextPlan: '完成核心模块联调。', problemsAndMeasures: '跨单位数据口径不一致，计划组织专项协调。',
+    status: '初审中', overdue: false, version: 1, submittedAt: '2026-09-08', updatedAt: '2026-09-08',
+  },
+];
+
+export const MOCK_SELF_FUNDED_PROJECTS: SelfFundedProject[] = [
+  { id: 'sf-1', topicId: 't1', code: 'ZC-KJ-001', name: '智能调度验证平台研发', projectType: '科技项目', principalName: '李工', implementingUnit: '广西电网有限责任公司', startDate: '2025-03-01', endDate: '2027-12-31', budget: 320, status: '实施中', templateSnapshotId: 'tpl-tech-v1' },
+  { id: 'sf-2', topicId: 't1', code: 'ZC-JG-001', name: '示范站技术改造', projectType: '技改项目', principalName: '陈工', implementingUnit: '南宁供电局', startDate: '2026-01-01', endDate: '2027-06-30', budget: 180, status: '实施中', templateSnapshotId: 'tpl-renovation-v1' },
+  { id: 'sf-3', topicId: 't2', code: 'ZC-JJ-001', name: '试验环境基础设施建设', projectType: '基建项目', principalName: '周工', implementingUnit: '广西电网有限责任公司', startDate: '2025-08-01', endDate: '2026-12-31', budget: 450, status: '验收中', templateSnapshotId: 'tpl-infrastructure-v1' },
+];
+
+export const MOCK_ARCHIVE_SUBMISSIONS: ArchiveSubmission[] = [
+  { id: 'as-public-1', requirementId: 'ar-1', ownerType: 'PROJECT_PUBLIC', ownerId: 'p1', applicability: 'APPLICABLE', status: '已通过', fileIds: ['file-task-book'], version: 1, submittedAt: '2026-01-05', updatedAt: '2026-01-06' },
+  { id: 'as-topic-1', requirementId: 'ar-4', ownerType: 'TOPIC_NATIONAL', ownerId: 't1', topicId: 't1', applicability: 'APPLICABLE', status: '初审中', fileIds: ['file-paper-list'], version: 1, submittedAt: '2026-09-02', updatedAt: '2026-09-02' },
 ];
