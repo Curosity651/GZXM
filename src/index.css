@@ -32,23 +32,9 @@ button, input, textarea, select { font: inherit; }
 .empty-compact { padding: 38px 0; text-align: center; color: #9aa6b6; font-size: 28px; }
 .empty-compact p { margin: 8px 0 0; font-size: 13px; }
 
-.login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(520px, 1.25fr) minmax(460px, .75fr); background: #eff4fb; }
-.login-hero { position: relative; overflow: hidden; padding: 13vh 8vw; color: white; background: radial-gradient(circle at 20% 20%, rgba(72,168,255,.55), transparent 34%), radial-gradient(circle at 80% 70%, rgba(65,231,189,.22), transparent 28%), linear-gradient(135deg, #071b3d 0%, #123d79 58%, #0b5c8a 100%); }
-.login-hero::after { content: ""; position: absolute; width: 520px; height: 520px; right: -150px; bottom: -170px; border: 1px solid rgba(255,255,255,.15); border-radius: 50%; box-shadow: 0 0 0 70px rgba(255,255,255,.025), 0 0 0 140px rgba(255,255,255,.018); }
-.login-emblem { width: 64px; height: 64px; margin-bottom: 34px; display: grid; place-items: center; border-radius: 18px; font-size: 32px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); }
-.login-kicker { color: #8ed7ff !important; font-size: 15px; letter-spacing: 5px; }
-.login-title { max-width: 640px; margin: 18px 0 !important; color: white !important; font-size: clamp(38px, 4vw, 62px) !important; line-height: 1.12 !important; }
-.login-copy { max-width: 620px; color: rgba(255,255,255,.72) !important; font-size: 17px; line-height: 1.9; }
-.login-metric-row { margin-top: 56px; display: flex; gap: 54px; }
-.login-metric-row div { display: flex; flex-direction: column; }
-.login-metric-row b { font-size: 30px; }
-.login-metric-row span { color: rgba(255,255,255,.58); font-size: 12px; }
-.login-card { width: 430px; align-self: center; justify-self: center; padding: 14px; border-radius: 18px; box-shadow: 0 24px 65px rgba(22,53,94,.16); }
-.demo-accounts { margin-top: 24px; padding-top: 20px; border-top: 1px solid #edf0f5; }
-.account-chip { width: 100%; padding: 8px; display: flex; align-items: center; justify-content: space-between; gap: 4px; color: #58677c; border: 1px solid #e6ebf2; border-radius: 8px; background: #fafcff; cursor: pointer; }
-.account-chip:hover { border-color: #69a8ff; background: #f2f7ff; }
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f3f6fa; }
+.login-card { width: min(420px, 100%); padding: 20px; border-radius: 16px; box-shadow: 0 18px 48px rgba(22,53,94,.13); }
 
 @media (max-width: 1280px) {
   .app-content { padding-inline: 20px; }
-  .login-hero { padding-inline: 6vw; }
 }
