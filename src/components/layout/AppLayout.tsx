@@ -8,7 +8,8 @@ import {
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store';
-import { canViewPage, type PageKey } from '../../domain/permissions';
+import { canViewPage, getRole, type PageKey } from '../../domain/permissions';
+import type { RbacRole, User } from '../../types';
 
 const { Sider, Content, Header } = Layout;
 const { Text } = Typography;
@@ -57,23 +58,24 @@ const menuTree: MenuNode[] = [
   {
     key: 'admin-group', label: '系统管理', icon: <SettingOutlined />, children: [
       { key: '/admin/users', label: <Link to="/admin/users">用户管理</Link>, page: 'user-management' },
+      { key: '/admin/roles', label: <Link to="/admin/roles">角色权限管理</Link>, page: 'role-permission' },
       { key: '/admin/config', label: <Link to="/admin/config">系统配置</Link>, page: 'system-config' },
     ],
   },
 ];
 
-function visibleMenu(nodes: MenuNode[], role: NonNullable<ReturnType<typeof useAppStore.getState>['currentUser']>['role']): MenuNode[] {
+function visibleMenu(nodes: MenuNode[], user: User, roles: RbacRole[]): MenuNode[] {
   const result: MenuNode[] = [];
   nodes.forEach((node) => {
-    const children = node.children ? visibleMenu(node.children, role) : undefined;
+    const children = node.children ? visibleMenu(node.children, user, roles) : undefined;
     if (children && children.length > 0) result.push({ ...node, children });
-    else if (node.page && canViewPage(role, node.page)) result.push({ ...node });
+    else if (node.page && canViewPage(user, roles, node.page)) result.push({ ...node });
   });
   return result;
 }
 
 export function AppLayout() {
-  const { currentUser, project, resetToMock, logout } = useAppStore();
+  const { currentUser, project, roles, resetToMock, logout } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
   if (!currentUser) return null;
@@ -92,7 +94,7 @@ export function AppLayout() {
           <div className="brand-mark"><SafetyCertificateOutlined /></div>
           <div><div className="brand-title">GZXM 科研管理</div><div className="brand-subtitle">重点项目协同工作台</div></div>
         </div>
-        <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['indicator-group', 'achievement-group', 'archive-group']} items={visibleMenu(menuTree, currentUser.role) as MenuProps['items']} />
+        <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['indicator-group', 'achievement-group', 'archive-group', 'admin-group']} items={visibleMenu(menuTree, currentUser, roles) as MenuProps['items']} />
         <div className="sider-foot"><BellOutlined /> Mock 原型 · 数据仅存本机</div>
       </Sider>
       <Layout>
@@ -101,7 +103,7 @@ export function AppLayout() {
           <Space size={12}>
             <Button type="text" onClick={confirmReset}>重置演示数据</Button>
             <Dropdown menu={{ items: [
-              { key: 'role', icon: <TeamOutlined />, label: currentUser.role, disabled: true },
+              { key: 'role', icon: <TeamOutlined />, label: getRole(currentUser, roles)?.name ?? '未分配角色', disabled: true },
               { type: 'divider' },
               { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: () => { logout(); navigate('/login', { replace: true }); } },
             ] }}>

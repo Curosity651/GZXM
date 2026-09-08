@@ -11,12 +11,13 @@ const routePermissions: Record<string, PageKey> = {
   '/progress-overview': 'progress-overview',
   '/archive/catalog': 'project-public-archive', '/archive/public': 'project-public-archive',
   '/archive/topics': 'topic-archive', '/archive/self-funded': 'self-funded-archive',
-  '/archive/approval': 'archive-review', '/archive/monitoring': 'archive-monitoring', '/admin/users': 'user-management',
+  '/archive/approval': 'archive-review', '/archive/monitoring': 'archive-monitoring', '/admin/users': 'user-management', '/admin/roles': 'role-permission',
   '/admin/config': 'system-config',
 };
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const currentUser = useAppStore((s) => s.currentUser);
+  const roles = useAppStore((s) => s.roles);
   const location = useLocation();
 
   if (!currentUser) {
@@ -24,7 +25,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   const page = routePermissions[location.pathname];
-  if (page && !canViewPage(currentUser.role, page)) {
+  if (page && !canViewPage(currentUser, roles, page)) {
     return <Result status="403" title="无权访问" subTitle="当前角色没有该页面权限，请从左侧菜单进入可用功能。" />;
   }
 
