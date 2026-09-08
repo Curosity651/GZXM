@@ -11,6 +11,13 @@ describe('Mock 数据范围', () => {
 });
 
 describe('成果审批记录', () => {
+  it('课题账号提交预审后进入初审队列', () => {
+    const store = createAppStore();
+    store.getState().updateAchievement('ach-pre-review', { status: '预审草稿' });
+    store.getState().advanceAchievement('ach-pre-review', 'SUBMIT_PRE_REVIEW', 'user-topic-1');
+    expect(store.getState().achievements.find((item) => item.id === 'ach-pre-review')?.status).toBe('预审初审中');
+  });
+
   it('初审通过后进入终审并写入审批记录', () => {
     const store = createAppStore();
     store.getState().reviewAchievement('ach-pre-review', 'APPROVE_INITIAL', 'user-assistant', '材料完整');
@@ -29,5 +36,13 @@ describe('成果审批记录', () => {
     const achievement = store.getState().achievements.find((item) => item.id === 'ach-formal-final');
     expect(achievement?.status).toBe('已生效');
     expect(achievement?.countsToIndicator).toBe(true);
+  });
+
+  it('终审退回由项目技术负责人操作并记录为终审', () => {
+    const store = createAppStore();
+    store.getState().reviewAchievement('ach-formal-final', 'RETURN', 'user-leader', '请补充正式受理材料');
+
+    expect(store.getState().achievements.find((item) => item.id === 'ach-formal-final')?.status).toBe('正式退回');
+    expect(store.getState().approvalRecords.at(-1)).toEqual(expect.objectContaining({ level: 'FINAL', decision: 'RETURNED' }));
   });
 });

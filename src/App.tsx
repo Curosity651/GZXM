@@ -9,6 +9,7 @@ import { IndicatorConfigPage } from './pages/indicator/IndicatorConfigPage';
 import { WarningRulePage } from './pages/warning/WarningRulePage';
 import { AchievementEntryPage } from './pages/achievement/AchievementEntryPage';
 import { AchievementApprovalPage } from './pages/achievement/AchievementApprovalPage';
+import { AchievementQueryPage } from './pages/achievement/AchievementQueryPage';
 import { IndicatorMonitoringPage } from './pages/monitoring/IndicatorMonitoringPage';
 import { ArchiveCatalogPage } from './pages/archive/ArchiveCatalogPage';
 import { MaterialUploadPage } from './pages/archive/MaterialUploadPage';
@@ -32,6 +33,7 @@ function App() {
             <Route path="warning-rules" element={<WarningRulePage />} />
             <Route path="achievement-entry" element={<AchievementEntryPage />} />
             <Route path="achievement-approval" element={<AchievementApprovalPage />} />
+            <Route path="achievement-query" element={<AchievementQueryPage />} />
             <Route path="monitoring" element={<IndicatorMonitoringPage />} />
             <Route path="archive/catalog" element={<ArchiveCatalogPage />} />
             <Route path="archive/upload" element={<MaterialUploadPage />} />

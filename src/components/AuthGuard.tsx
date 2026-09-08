@@ -6,6 +6,7 @@ import { canViewPage, type PageKey } from '../domain/permissions';
 const routePermissions: Record<string, PageKey> = {
   '/indicator': 'topic-indicator', '/warning-rules': 'warning-rules', '/monitoring': 'indicator-monitoring',
   '/achievement-entry': 'achievement-entry', '/achievement-approval': 'achievement-review',
+  '/achievement-query': 'achievement-query',
   '/archive/catalog': 'project-public-archive', '/archive/upload': 'topic-archive',
   '/archive/query': 'topic-archive', '/archive/monitoring': 'archive-monitoring', '/admin/users': 'user-management',
 };

@@ -58,6 +58,7 @@ export interface AppState extends AppData {
   approveAchievement: (id: string, payload: Partial<Achievement>, approver: string) => void;
   rejectAchievement: (id: string, reason: string, approver: string) => void;
   returnAchievement: (id: string, reason: string, approver: string) => void;
+  advanceAchievement: (id: string, action: AchievementAction, operatorId: string) => void;
   reviewAchievement: (id: string, action: AchievementAction, operatorId: string, opinion: string) => void;
   addArchiveCategory: (category: ArchiveCategory) => void;
   updateArchiveCategory: (id: string, updates: Partial<ArchiveCategory>) => void;
@@ -134,13 +135,26 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   approveAchievement: (id, payload, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, ...payload, status: '审批通过', countsToIndicator: true, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
   rejectAchievement: (id, reason, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '审批不通过', countsToIndicator: false, approvalOpinion: reason, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
   returnAchievement: (id, reason, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '退回修改', countsToIndicator: false, approvalOpinion: reason, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
+  advanceAchievement: (id, action, operatorId) => {
+    const current = get().achievements.find((achievement) => achievement.id === id);
+    const operator = get().users.find((user) => user.id === operatorId);
+    if (!current || !operator) throw new Error('成果或操作人不存在');
+    if (operator.role !== '课题牵头单位' || operator.topicId !== current.topicId) throw new Error('只能提交本课题成果');
+    if (!['SUBMIT_PRE_REVIEW', 'START_FORMAL', 'SUBMIT_FORMAL'].includes(action)) throw new Error('该动作不是成果提交动作');
+    const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
+    set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? {
+      ...achievement, status: nextStatus, submittedAt: action.startsWith('SUBMIT') ? today() : achievement.submittedAt,
+      updatedAt: today(), countsToIndicator: false,
+    } : achievement) }));
+  },
   reviewAchievement: (id, action, operatorId, opinion) => {
     const current = get().achievements.find((achievement) => achievement.id === id);
     if (!current) throw new Error('成果不存在');
     const operator = get().users.find((user) => user.id === operatorId);
     if (!operator) throw new Error('审批人不存在');
-    if (action === 'APPROVE_INITIAL' && operator.role !== '科研助理') throw new Error('仅科研助理可以初审');
-    if (action === 'APPROVE_FINAL' && operator.role !== '项目技术负责人') throw new Error('仅项目技术负责人可以终审');
+    const atFinalLevel = current.status.includes('终审中');
+    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && operator.role !== '科研助理') throw new Error('仅科研助理可以初审');
+    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && operator.role !== '项目技术负责人') throw new Error('仅项目技术负责人可以终审');
     const workflowStatuses = ['预审草稿', '预审初审中', '预审终审中', '预审退回', '预审通过', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', '已生效'];
     if (!workflowStatuses.includes(current.status)) throw new Error('该成果仍使用旧版流程，不能执行新版审批');
     const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
@@ -148,7 +162,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
       id: `approval-${Date.now()}-${id}`,
       businessType: 'ACHIEVEMENT', businessId: id,
       stage: current.status.startsWith('预审') ? 'PRE_REVIEW' : 'FORMAL',
-      level: action === 'APPROVE_FINAL' ? 'FINAL' : 'INITIAL',
+      level: action === 'APPROVE_FINAL' || atFinalLevel ? 'FINAL' : 'INITIAL',
       decision: action === 'RETURN' ? 'RETURNED' : 'APPROVED',
       opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: 1,
     };
