@@ -15,6 +15,7 @@ import {
 } from '../data/mock';
 import { nextAchievementStatus, type AchievementAction } from '../domain/workflows';
 import { nextReportStatus, type ReportAction } from '../domain/report-flow';
+import { nextArchiveStatus, type ArchiveAction } from '../domain/archive-flow';
 
 export interface AppData {
   project: Project;
@@ -64,6 +65,10 @@ export interface AppState extends AppData {
   saveReport: (report: ProgressReport) => void;
   submitReport: (id: string, operatorId: string) => void;
   reviewReport: (id: string, action: ReportAction, operatorId: string, opinion: string) => void;
+  addSelfFundedProject: (project: SelfFundedProject, operatorId: string) => void;
+  saveArchiveSubmission: (submission: ArchiveSubmission) => void;
+  submitArchive: (id: string, operatorId: string) => void;
+  reviewArchive: (id: string, action: ArchiveAction, operatorId: string, opinion: string) => void;
   addArchiveCategory: (category: ArchiveCategory) => void;
   updateArchiveCategory: (id: string, updates: Partial<ArchiveCategory>) => void;
   removeArchiveCategory: (id: string) => void;
@@ -206,6 +211,44 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     };
     set((state) => ({
       reports: state.reports.map((item) => item.id === id ? { ...item, status, updatedAt: today() } : item),
+      approvalRecords: [...state.approvalRecords, record],
+    }));
+  },
+  addSelfFundedProject: (project, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator || operator.role !== '课题牵头单位' || operator.topicId !== project.topicId) throw new Error('只能在本课题下新建配套自筹项目');
+    set((state) => ({ selfFundedProjects: [...state.selfFundedProjects, project] }));
+  },
+  saveArchiveSubmission: (submission) => set((state) => ({
+    archiveSubmissions: state.archiveSubmissions.some((item) => item.id === submission.id)
+      ? state.archiveSubmissions.map((item) => item.id === submission.id ? submission : item)
+      : [...state.archiveSubmissions, submission],
+  })),
+  submitArchive: (id, operatorId) => {
+    const submission = get().archiveSubmissions.find((item) => item.id === id);
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!submission || !operator) throw new Error('归档记录或操作人不存在');
+    const canSubmitPublic = submission.ownerType === 'PROJECT_PUBLIC' && operator.role === '科研助理';
+    const canSubmitTopic = submission.ownerType !== 'PROJECT_PUBLIC' && operator.role === '课题牵头单位' && operator.topicId === submission.topicId;
+    if (!canSubmitPublic && !canSubmitTopic) throw new Error('没有该归档记录的提交权限');
+    const status = nextArchiveStatus(submission.ownerType, submission.status, 'SUBMIT');
+    set((state) => ({ archiveSubmissions: state.archiveSubmissions.map((item) => item.id === id ? { ...item, status, submittedAt: today(), updatedAt: today() } : item) }));
+  },
+  reviewArchive: (id, action, operatorId, opinion) => {
+    const submission = get().archiveSubmissions.find((item) => item.id === id);
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!submission || !operator) throw new Error('归档记录或审批人不存在');
+    const atFinalLevel = submission.status === '终审中';
+    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && operator.role !== '科研助理') throw new Error('仅科研助理可以初审归档材料');
+    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && operator.role !== '项目技术负责人') throw new Error('仅项目技术负责人可以终审归档材料');
+    const status = nextArchiveStatus(submission.ownerType, submission.status, action);
+    const record: ApprovalRecord = {
+      id: `approval-${Date.now()}-${id}`, businessType: 'ARCHIVE', businessId: id, stage: 'ARCHIVE',
+      level: atFinalLevel ? 'FINAL' : 'INITIAL', decision: action === 'RETURN' ? 'RETURNED' : 'APPROVED',
+      opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: submission.version,
+    };
+    set((state) => ({
+      archiveSubmissions: state.archiveSubmissions.map((item) => item.id === id ? { ...item, status, updatedAt: today() } : item),
       approvalRecords: [...state.approvalRecords, record],
     }));
   },

@@ -12,9 +12,11 @@ import { AchievementApprovalPage } from './pages/achievement/AchievementApproval
 import { AchievementQueryPage } from './pages/achievement/AchievementQueryPage';
 import { IndicatorMonitoringPage } from './pages/monitoring/IndicatorMonitoringPage';
 import { ArchiveCatalogPage } from './pages/archive/ArchiveCatalogPage';
-import { MaterialUploadPage } from './pages/archive/MaterialUploadPage';
-import { MaterialQueryPage } from './pages/archive/MaterialQueryPage';
 import { ArchiveMonitoringPage } from './pages/archive/ArchiveMonitoringPage';
+import { ProjectPublicArchivePage } from './pages/archive/ProjectPublicArchivePage';
+import { TopicArchivePage } from './pages/archive/TopicArchivePage';
+import { SelfFundedProjectPage } from './pages/archive/SelfFundedProjectPage';
+import { ArchiveApprovalPage } from './pages/archive/ArchiveApprovalPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { ReportManagementPage } from './pages/report/ReportManagementPage';
 import { ReportApprovalPage } from './pages/report/ReportApprovalPage';
@@ -41,8 +43,10 @@ function App() {
             <Route path="reports" element={<ReportManagementPage />} />
             <Route path="report-approval" element={<ReportApprovalPage />} />
             <Route path="archive/catalog" element={<ArchiveCatalogPage />} />
-            <Route path="archive/upload" element={<MaterialUploadPage />} />
-            <Route path="archive/query" element={<MaterialQueryPage />} />
+            <Route path="archive/public" element={<ProjectPublicArchivePage />} />
+            <Route path="archive/topics" element={<TopicArchivePage />} />
+            <Route path="archive/self-funded" element={<SelfFundedProjectPage />} />
+            <Route path="archive/approval" element={<ArchiveApprovalPage />} />
             <Route path="archive/monitoring" element={<ArchiveMonitoringPage />} />
             <Route path="admin/users" element={<UserManagementPage />} />
           </Route>

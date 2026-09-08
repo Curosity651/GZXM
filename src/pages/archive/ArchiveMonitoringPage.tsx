@@ -1,161 +1,21 @@
-import { useState } from 'react';
-import { Card, Progress, Select, Space, Table, Tag } from 'antd';
+import { Card, Col, Progress, Row, Space, Table, Tag } from 'antd';
+import { PageHeader } from '../../components/common/PageHeader';
 import { useAppStore } from '../../store';
-
-const { Option } = Select;
+import { archiveCompletion } from '../../domain/archive';
 
 export function ArchiveMonitoringPage() {
-  const {
-    archiveCategories,
-    archiveMaterials,
-    archiveRequirements,
-    achievements,
-    units,
-    nodes,
-  } = useAppStore();
-
-  const [filterNodeId, setFilterNodeId] = useState<string>('');
-
-  const unitMap = Object.fromEntries(units.map((u) => [u.id, u.name]));
-
-  // Filter requirements by node if a node filter is selected
-  const filteredRequirements = filterNodeId
-    ? archiveRequirements.filter((r) => !r.applicableNodeId || r.applicableNodeId === filterNodeId)
-    : archiveRequirements;
-
-  // Calculate stats per category
-  const stats = archiveCategories.map((category) => {
-    const reqs = filteredRequirements.filter((r) => r.categoryId === category.id && r.required);
-    const requiredCount = reqs.reduce((sum, r) => sum + r.requiredQuantity, 0);
-
-    // Count satisfied requirements (not just file count!)
-    // A requirement is satisfied if there are enough materials linked to it
-    let satisfiedCount = 0;
-    reqs.forEach((req) => {
-      const materialsForReq = archiveMaterials.filter(
-        (m) => m.categoryId === category.id && (!req.id || m.requirementId === req.id)
-      );
-      if (materialsForReq.length >= req.requiredQuantity) {
-        satisfiedCount++;
-      }
-    });
-    const totalRequiredRequirements = reqs.length;
-    const completionRate = totalRequiredRequirements > 0
-      ? (satisfiedCount / totalRequiredRequirements) * 100
-      : 0;
-    const missingCount = Math.max(0, totalRequiredRequirements - satisfiedCount);
-
-    return {
-      categoryId: category.id,
-      categoryName: category.name,
-      requiredCount,
-      totalRequiredRequirements,
-      satisfiedRequirements: satisfiedCount,
-      missingCount,
-      completionRate,
-      uploadedCount: archiveMaterials.filter((m) => m.categoryId === category.id).length,
-      reqs,
-    };
-  });
-
-  // Unarchived achievements: 审批通过 but no archive material linked
-  const unarchivedAchievements = achievements.filter((a) => {
-    if (a.status !== '审批通过') return false;
-    return !archiveMaterials.some((m) => m.sourceAchievementId === a.id);
-  });
-
-  const statsColumns = [
-    {
-      title: '归档目录',
-      dataIndex: 'categoryName',
-      key: 'categoryName',
-    },
-    {
-      title: '必交材料要求',
-      key: 'requirements',
-      render: (_: any, record: any) => (
-        <span>
-          {record.totalRequiredRequirements} 项要求 / {record.requiredCount} 份材料
-        </span>
-      ),
-    },
-    {
-      title: '已上传',
-      dataIndex: 'uploadedCount',
-      key: 'uploadedCount',
-    },
-    {
-      title: '已满足',
-      dataIndex: 'satisfiedRequirements',
-      key: 'satisfiedRequirements',
-      render: (v: number) => <Tag color="success">{v}</Tag>,
-    },
-    {
-      title: '缺失要求',
-      dataIndex: 'missingCount',
-      key: 'missingCount',
-      render: (v: number) => (
-        <Tag color={v > 0 ? 'error' : 'success'}>{v}</Tag>
-      ),
-    },
-    {
-      title: '完成率',
-      dataIndex: 'completionRate',
-      key: 'completionRate',
-      render: (v: number) => (
-        <Progress
-          percent={Number(v.toFixed(1))}
-          size="small"
-          status={v >= 100 ? 'success' : 'active'}
-        />
-      ),
-    },
-  ];
-
-  const achievementColumns = [
-    { title: '成果名称', dataIndex: 'title', key: 'title' },
-    { title: '成果类型', dataIndex: 'achievementType', key: 'achievementType' },
-    {
-      title: '责任单位',
-      dataIndex: 'unitId',
-      key: 'unitId',
-      render: (v: string) => unitMap[v] || v,
-    },
-    { title: '责任人', dataIndex: 'responsiblePerson', key: 'responsiblePerson' },
-  ];
-
-  return (
-    <div>
-      <Card title="归档进度监控" style={{ marginBottom: 16 }}>
-        <Space style={{ marginBottom: 16 }}>
-          <Select
-            placeholder="按节点筛选"
-            allowClear
-            style={{ width: 200 }}
-            value={filterNodeId || undefined}
-            onChange={(v) => setFilterNodeId(v || '')}
-          >
-            {nodes.map((n) => (
-              <Option key={n.id} value={n.id}>{n.name}</Option>
-            ))}
-          </Select>
-        </Space>
-        <Table
-          rowKey="categoryId"
-          columns={statsColumns}
-          dataSource={stats}
-          pagination={false}
-        />
-      </Card>
-
-      <Card title="未归档成果">
-        <Table
-          rowKey="id"
-          columns={achievementColumns}
-          dataSource={unarchivedAchievements}
-          pagination={{ pageSize: 10 }}
-        />
-      </Card>
-    </div>
-  );
+  const state = useAppStore();
+  const user = state.currentUser!;
+  const topicIds = user.role === '课题牵头单位' ? [user.topicId!] : state.topics.map((item) => item.id);
+  const publicReqs = state.archiveRequirements.filter((item) => item.ownerType === 'PROJECT_PUBLIC');
+  const topicReqs = state.archiveRequirements.filter((item) => item.ownerType === 'TOPIC_NATIONAL');
+  const publicStats = archiveCompletion(publicReqs, state.archiveSubmissions.filter((item) => item.ownerType === 'PROJECT_PUBLIC'));
+  const topicRows = state.topics.filter((topic) => topicIds.includes(topic.id)).map((topic) => ({ ...topic, stats: archiveCompletion(topicReqs, state.archiveSubmissions.filter((item) => item.ownerType === 'TOPIC_NATIONAL' && item.ownerId === topic.id)) }));
+  const projectRows = state.selfFundedProjects.filter((item) => topicIds.includes(item.topicId)).map((project) => ({ ...project, stats: archiveCompletion(state.archiveRequirements.filter((item) => item.ownerType === 'SELF_FUNDED' && item.templateId === project.templateSnapshotId), state.archiveSubmissions.filter((item) => item.ownerType === 'SELF_FUNDED' && item.ownerId === project.id)) }));
+  return <>
+    <PageHeader title="归档进度监控" description="仅终审通过的清单项计入完成率，条件材料在确认适用后进入分母。" />
+    <Row gutter={[16, 16]} style={{ marginBottom: 16 }}><Col xs={24} md={8}><Card title="项目公共材料"><Progress type="dashboard" percent={publicStats.rate} /><div>{publicStats.completed}/{publicStats.required} 项完成</div></Card></Col><Col xs={24} md={8}><Card title="课题国家材料"><h1>{topicRows.length}</h1><span>个课题纳入监控</span></Card></Col><Col xs={24} md={8}><Card title="配套自筹项目"><h1>{projectRows.length}</h1><span>个项目纳入归档</span></Card></Col></Row>
+    <Card title="课题国家材料" style={{ marginBottom: 16 }}><Table rowKey="id" pagination={false} dataSource={topicRows} columns={[{ title: '课题', render: (_, row) => <Space><Tag>{row.code}</Tag>{row.name}</Space> }, { title: '完成项', render: (_, row) => `${row.stats.completed}/${row.stats.required}` }, { title: '完成率', render: (_, row) => <Progress percent={row.stats.rate} /> }]} /></Card>
+    <Card title="配套自筹项目归档"><Table rowKey="id" pagination={false} dataSource={projectRows} columns={[{ title: '所属课题', dataIndex: 'topicId', render: (value) => state.topics.find((item) => item.id === value)?.name }, { title: '项目名称', dataIndex: 'name' }, { title: '类型', dataIndex: 'projectType', render: (value) => <Tag color="purple">{value}</Tag> }, { title: '完成项', render: (_, row) => `${row.stats.completed}/${row.stats.required}` }, { title: '完成率', render: (_, row) => <Progress percent={row.stats.rate} /> }]} /></Card>
+  </>;
 }

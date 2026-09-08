@@ -47,8 +47,10 @@ const menuTree: MenuNode[] = [
   {
     key: 'archive-group', label: '归档材料', icon: <InboxOutlined />, children: [
       { key: '/archive/catalog', label: <Link to="/archive/catalog">归档目录</Link>, page: 'project-public-archive' },
-      { key: '/archive/upload', label: <Link to="/archive/upload">材料办理</Link>, page: 'topic-archive' },
-      { key: '/archive/query', label: <Link to="/archive/query">材料查询</Link>, page: 'topic-archive' },
+      { key: '/archive/public', label: <Link to="/archive/public">重点项目公共材料</Link>, page: 'project-public-archive' },
+      { key: '/archive/topics', label: <Link to="/archive/topics">课题国家材料</Link>, page: 'topic-archive' },
+      { key: '/archive/self-funded', label: <Link to="/archive/self-funded">配套自筹项目</Link>, page: 'self-funded-archive' },
+      { key: '/archive/approval', label: <Link to="/archive/approval">归档审批</Link>, page: 'archive-review' },
       { key: '/archive/monitoring', label: <Link to="/archive/monitoring">归档进度监控</Link>, page: 'archive-monitoring' },
     ],
   },

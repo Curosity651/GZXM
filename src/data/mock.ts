@@ -221,11 +221,29 @@ export const MOCK_ARCHIVE_CATEGORIES: ArchiveCategory[] = [
 ];
 
 export const MOCK_ARCHIVE_REQUIREMENTS: ArchiveRequirement[] = [
-  { id: 'ar-1', projectId: 'p1', categoryId: 'ac-1', name: '项目任务书', required: true, requiredQuantity: 1 },
-  { id: 'ar-2', projectId: 'p1', categoryId: 'ac-1', name: '项目申报书', required: true, requiredQuantity: 1 },
-  { id: 'ar-3', projectId: 'p1', categoryId: 'ac-2', name: '年度报告', required: true, requiredQuantity: 3, applicableNodeId: 'node-2' },
-  { id: 'ar-4', projectId: 'p1', categoryId: 'ac-3', name: '代表性论文汇编', required: true, requiredQuantity: 4, applicableNodeId: 'node-5' },
-  { id: 'ar-5', projectId: 'p1', categoryId: 'ac-4', name: '中期检查材料', required: true, requiredQuantity: 1, applicableNodeId: 'node-3' },
+  { id: 'ar-public-1', projectId: 'p1', categoryId: 'ac-1', name: '项目申报书', required: true, requiredQuantity: 1, ownerType: 'PROJECT_PUBLIC', requirementKind: 'REQUIRED', sourceCode: 'F1', sourceRow: 30 },
+  { id: 'ar-public-2', projectId: 'p1', categoryId: 'ac-1', name: '项目立项批复（含预算）', required: true, requiredQuantity: 1, ownerType: 'PROJECT_PUBLIC', requirementKind: 'REQUIRED', sourceCode: 'F5', sourceRow: 34 },
+  { id: 'ar-public-3', projectId: 'p1', categoryId: 'ac-2', name: '项目任务合同书', required: true, requiredQuantity: 1, ownerType: 'PROJECT_PUBLIC', requirementKind: 'REQUIRED', sourceCode: 'F7', sourceRow: 36 },
+  { id: 'ar-public-4', projectId: 'p1', categoryId: 'ac-4', name: '综合绩效评价结论及过程材料', required: true, requiredQuantity: 1, ownerType: 'PROJECT_PUBLIC', requirementKind: 'REQUIRED', sourceCode: 'H11', sourceRow: 64 },
+  { id: 'ar-topic-1', projectId: 'p1', categoryId: 'ac-1', name: '申报评审过程材料', required: false, requiredQuantity: 1, ownerType: 'TOPIC_NATIONAL', requirementKind: 'CONDITIONAL', sourceCode: 'F4', sourceRow: 33 },
+  { id: 'ar-topic-2', projectId: 'p1', categoryId: 'ac-1', name: '保密协议', required: false, requiredQuantity: 1, ownerType: 'TOPIC_NATIONAL', requirementKind: 'CONDITIONAL', sourceCode: 'F6', sourceRow: 35 },
+  { id: 'ar-topic-3', projectId: 'p1', categoryId: 'ac-2', name: '实验任务书及实验记录', required: false, requiredQuantity: 1, ownerType: 'TOPIC_NATIONAL', requirementKind: 'CONDITIONAL', sourceCode: 'G1', sourceRow: 38 },
+  { id: 'ar-topic-4', projectId: 'p1', categoryId: 'ac-3', name: '知识产权证明材料', required: true, requiredQuantity: 1, ownerType: 'TOPIC_NATIONAL', requirementKind: 'REQUIRED', sourceCode: 'H6', sourceRow: 58 },
+  { id: 'ar-topic-5', projectId: 'p1', categoryId: 'ac-3', name: '项目成果统计分析文件', required: false, requiredQuantity: 1, ownerType: 'TOPIC_NATIONAL', requirementKind: 'CONDITIONAL', sourceCode: 'J1', sourceRow: 85 },
+  { id: 'ar-topic-6', projectId: 'p1', categoryId: 'ac-4', name: '经费执行情况报告', required: false, requiredQuantity: 1, ownerType: 'TOPIC_NATIONAL', requirementKind: 'CONDITIONAL', sourceCode: 'H14', sourceRow: 68 },
+  { id: 'ar-tech-1', projectId: 'p1', categoryId: 'ac-1', name: '项目立项文件', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-tech-v1' },
+  { id: 'ar-tech-2', projectId: 'p1', categoryId: 'ac-1', name: '合同及技术协议', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-tech-v1' },
+  { id: 'ar-tech-3', projectId: 'p1', categoryId: 'ac-2', name: '实施方案及过程报告', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-tech-v1' },
+  { id: 'ar-tech-4', projectId: 'p1', categoryId: 'ac-3', name: '成果证明材料', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-tech-v1' },
+  { id: 'ar-tech-5', projectId: 'p1', categoryId: 'ac-4', name: '验收证书及验收报告', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-tech-v1' },
+  { id: 'ar-reno-1', projectId: 'p1', categoryId: 'ac-1', name: '项目建议书及批复', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-renovation-v1' },
+  { id: 'ar-reno-2', projectId: 'p1', categoryId: 'ac-1', name: '招投标及合同材料', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-renovation-v1' },
+  { id: 'ar-reno-3', projectId: 'p1', categoryId: 'ac-2', name: '施工及设备调试记录', required: false, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'CONDITIONAL', templateId: 'tpl-renovation-v1' },
+  { id: 'ar-reno-4', projectId: 'p1', categoryId: 'ac-4', name: '竣工验收及结算材料', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-renovation-v1' },
+  { id: 'ar-infra-1', projectId: 'p1', categoryId: 'ac-1', name: '立项及可研材料', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-infrastructure-v1' },
+  { id: 'ar-infra-2', projectId: 'p1', categoryId: 'ac-1', name: '招投标及合同材料', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-infrastructure-v1' },
+  { id: 'ar-infra-3', projectId: 'p1', categoryId: 'ac-2', name: '设备到货与安装调试记录', required: false, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'CONDITIONAL', templateId: 'tpl-infrastructure-v1' },
+  { id: 'ar-infra-4', projectId: 'p1', categoryId: 'ac-4', name: '竣工验收材料', required: true, requiredQuantity: 1, ownerType: 'SELF_FUNDED', requirementKind: 'REQUIRED', templateId: 'tpl-infrastructure-v1' },
 ];
 
 export const MOCK_ARCHIVE_MATERIALS: ArchiveMaterial[] = [
@@ -259,6 +277,7 @@ export const MOCK_SELF_FUNDED_PROJECTS: SelfFundedProject[] = [
 ];
 
 export const MOCK_ARCHIVE_SUBMISSIONS: ArchiveSubmission[] = [
-  { id: 'as-public-1', requirementId: 'ar-1', ownerType: 'PROJECT_PUBLIC', ownerId: 'p1', applicability: 'APPLICABLE', status: '已通过', fileIds: ['file-task-book'], version: 1, submittedAt: '2026-01-05', updatedAt: '2026-01-06' },
-  { id: 'as-topic-1', requirementId: 'ar-4', ownerType: 'TOPIC_NATIONAL', ownerId: 't1', topicId: 't1', applicability: 'APPLICABLE', status: '初审中', fileIds: ['file-paper-list'], version: 1, submittedAt: '2026-09-02', updatedAt: '2026-09-02' },
+  { id: 'as-public-1', requirementId: 'ar-public-1', ownerType: 'PROJECT_PUBLIC', ownerId: 'p1', applicability: 'APPLICABLE', status: '已通过', fileIds: ['file-project-application'], version: 1, submittedAt: '2026-01-05', updatedAt: '2026-01-06' },
+  { id: 'as-topic-1', requirementId: 'ar-topic-4', ownerType: 'TOPIC_NATIONAL', ownerId: 't1', topicId: 't1', applicability: 'APPLICABLE', status: '初审中', fileIds: ['file-ip-proof'], version: 1, submittedAt: '2026-09-02', updatedAt: '2026-09-02' },
+  { id: 'as-self-1', requirementId: 'ar-tech-1', ownerType: 'SELF_FUNDED', ownerId: 'sf-1', topicId: 't1', applicability: 'APPLICABLE', status: '终审中', fileIds: ['file-initiation'], version: 1, submittedAt: '2026-08-28', updatedAt: '2026-09-03' },
 ];

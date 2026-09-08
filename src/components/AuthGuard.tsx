@@ -9,8 +9,9 @@ const routePermissions: Record<string, PageKey> = {
   '/achievement-query': 'achievement-query',
   '/reports': 'report-management', '/report-approval': 'report-review',
   '/progress-overview': 'progress-overview',
-  '/archive/catalog': 'project-public-archive', '/archive/upload': 'topic-archive',
-  '/archive/query': 'topic-archive', '/archive/monitoring': 'archive-monitoring', '/admin/users': 'user-management',
+  '/archive/catalog': 'project-public-archive', '/archive/public': 'project-public-archive',
+  '/archive/topics': 'topic-archive', '/archive/self-funded': 'self-funded-archive',
+  '/archive/approval': 'archive-review', '/archive/monitoring': 'archive-monitoring', '/admin/users': 'user-management',
 };
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
