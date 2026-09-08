@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Avatar, Button, Dropdown, Layout, Menu, Modal, Space, Tag, Typography, message } from 'antd';
 import type { MenuProps } from 'antd';
 import {
-  BellOutlined, DashboardOutlined, FileDoneOutlined,
+  BellOutlined, DashboardOutlined, FileDoneOutlined, FileTextOutlined,
   HomeOutlined, InboxOutlined, LogoutOutlined, SafetyCertificateOutlined,
   SettingOutlined, TeamOutlined, UserOutlined,
 } from '@ant-design/icons';
@@ -35,6 +35,13 @@ const menuTree: MenuNode[] = [
       { key: '/achievement-entry', label: <Link to="/achievement-entry">成果填报</Link>, page: 'achievement-entry' },
       { key: '/achievement-approval', label: <Link to="/achievement-approval">成果审批</Link>, page: 'achievement-review' },
       { key: '/achievement-query', label: <Link to="/achievement-query">成果查询</Link>, page: 'achievement-query' },
+    ],
+  },
+  {
+    key: 'report-group', label: '进度管理', icon: <FileTextOutlined />, children: [
+      { key: '/reports', label: <Link to="/reports">月报与季报</Link>, page: 'report-management' },
+      { key: '/report-approval', label: <Link to="/report-approval">月季报审批</Link>, page: 'report-review' },
+      { key: '/progress-overview', label: <Link to="/progress-overview">项目进度总览</Link>, page: 'progress-overview' },
     ],
   },
   {

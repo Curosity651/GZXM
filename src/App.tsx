@@ -16,6 +16,8 @@ import { MaterialUploadPage } from './pages/archive/MaterialUploadPage';
 import { MaterialQueryPage } from './pages/archive/MaterialQueryPage';
 import { ArchiveMonitoringPage } from './pages/archive/ArchiveMonitoringPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
+import { ReportManagementPage } from './pages/report/ReportManagementPage';
+import { ReportApprovalPage } from './pages/report/ReportApprovalPage';
 
 function App() {
   return (
@@ -35,6 +37,9 @@ function App() {
             <Route path="achievement-approval" element={<AchievementApprovalPage />} />
             <Route path="achievement-query" element={<AchievementQueryPage />} />
             <Route path="monitoring" element={<IndicatorMonitoringPage />} />
+            <Route path="progress-overview" element={<IndicatorMonitoringPage />} />
+            <Route path="reports" element={<ReportManagementPage />} />
+            <Route path="report-approval" element={<ReportApprovalPage />} />
             <Route path="archive/catalog" element={<ArchiveCatalogPage />} />
             <Route path="archive/upload" element={<MaterialUploadPage />} />
             <Route path="archive/query" element={<MaterialQueryPage />} />

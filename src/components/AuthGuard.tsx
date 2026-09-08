@@ -7,6 +7,8 @@ const routePermissions: Record<string, PageKey> = {
   '/indicator': 'topic-indicator', '/warning-rules': 'warning-rules', '/monitoring': 'indicator-monitoring',
   '/achievement-entry': 'achievement-entry', '/achievement-approval': 'achievement-review',
   '/achievement-query': 'achievement-query',
+  '/reports': 'report-management', '/report-approval': 'report-review',
+  '/progress-overview': 'progress-overview',
   '/archive/catalog': 'project-public-archive', '/archive/upload': 'topic-archive',
   '/archive/query': 'topic-archive', '/archive/monitoring': 'archive-monitoring', '/admin/users': 'user-management',
 };

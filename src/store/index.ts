@@ -14,6 +14,7 @@ import {
   MOCK_TOPIC_POWER_GRID_REQUIREMENTS, MOCK_UNITS, MOCK_USERS, MOCK_WARNING_RULES, MOCK_WORKFLOW_ACHIEVEMENTS,
 } from '../data/mock';
 import { nextAchievementStatus, type AchievementAction } from '../domain/workflows';
+import { nextReportStatus, type ReportAction } from '../domain/report-flow';
 
 export interface AppData {
   project: Project;
@@ -60,6 +61,9 @@ export interface AppState extends AppData {
   returnAchievement: (id: string, reason: string, approver: string) => void;
   advanceAchievement: (id: string, action: AchievementAction, operatorId: string) => void;
   reviewAchievement: (id: string, action: AchievementAction, operatorId: string, opinion: string) => void;
+  saveReport: (report: ProgressReport) => void;
+  submitReport: (id: string, operatorId: string) => void;
+  reviewReport: (id: string, action: ReportAction, operatorId: string, opinion: string) => void;
   addArchiveCategory: (category: ArchiveCategory) => void;
   updateArchiveCategory: (id: string, updates: Partial<ArchiveCategory>) => void;
   removeArchiveCategory: (id: string) => void;
@@ -171,6 +175,37 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
         ...achievement, status: nextStatus, countsToIndicator: nextStatus === '已生效', updatedAt: today(),
         approvalOpinion: opinion, approver: operator.name, approvedAt: today(),
       } : achievement),
+      approvalRecords: [...state.approvalRecords, record],
+    }));
+  },
+  saveReport: (report) => set((state) => ({
+    reports: state.reports.some((item) => item.id === report.id)
+      ? state.reports.map((item) => item.id === report.id ? report : item)
+      : [...state.reports, report],
+  })),
+  submitReport: (id, operatorId) => {
+    const report = get().reports.find((item) => item.id === id);
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!report || !operator) throw new Error('报告或操作人不存在');
+    if (operator.role !== '课题牵头单位' || operator.topicId !== report.topicId) throw new Error('只能提交本课题报告');
+    const status = nextReportStatus(report.status, 'SUBMIT');
+    set((state) => ({ reports: state.reports.map((item) => item.id === id ? { ...item, status, submittedAt: today(), updatedAt: today() } : item) }));
+  },
+  reviewReport: (id, action, operatorId, opinion) => {
+    const report = get().reports.find((item) => item.id === id);
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!report || !operator) throw new Error('报告或审批人不存在');
+    const atFinalLevel = report.status === '终审中';
+    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && operator.role !== '科研助理') throw new Error('仅科研助理可以初审报告');
+    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && operator.role !== '项目技术负责人') throw new Error('仅项目技术负责人可以终审报告');
+    const status = nextReportStatus(report.status, action);
+    const record: ApprovalRecord = {
+      id: `approval-${Date.now()}-${id}`, businessType: 'REPORT', businessId: id, stage: 'REPORT',
+      level: atFinalLevel ? 'FINAL' : 'INITIAL', decision: action === 'RETURN' ? 'RETURNED' : 'APPROVED',
+      opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: report.version,
+    };
+    set((state) => ({
+      reports: state.reports.map((item) => item.id === id ? { ...item, status, updatedAt: today() } : item),
       approvalRecords: [...state.approvalRecords, record],
     }));
   },
