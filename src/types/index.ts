@@ -36,7 +36,10 @@ export type PaperType = 'SCI' | 'EI' | '中文核心' | 'CSCD' | '其他';
 export const PAPER_TYPES: PaperType[] = ['SCI', 'EI', '中文核心', 'CSCD', '其他'];
 export type EducationLevel = '博士' | '硕士';
 
-export type AchievementStatus = '草稿' | '已提交' | '审批中' | '审批通过' | '审批不通过' | '退回修改';
+export type AchievementWorkflowStatus =
+  | '预审草稿' | '预审初审中' | '预审终审中' | '预审退回' | '预审通过'
+  | '正式成果草稿' | '正式初审中' | '正式终审中' | '正式退回' | '已生效';
+export type AchievementStatus = AchievementWorkflowStatus | '草稿' | '已提交' | '审批中' | '审批通过' | '审批不通过' | '退回修改';
 export const ACHIEVEMENT_STATUS: AchievementStatus[] = ['草稿', '已提交', '审批中', '审批通过', '审批不通过', '退回修改'];
 
 // 时间节点
@@ -188,6 +191,29 @@ export interface ArchiveRequirement {
   id: string; projectId: string; categoryId: string; name: string;
   required: boolean; requiredQuantity: number;
   applicableNodeId?: string; description?: string;
+  ownerType?: 'PROJECT_PUBLIC' | 'TOPIC_NATIONAL' | 'SELF_FUNDED';
+  requirementKind?: 'REQUIRED' | 'CONDITIONAL';
+  sourceCode?: string;
+  sourceRow?: number;
+  templateId?: string;
+}
+
+export type ArchiveApplicability = 'PENDING' | 'APPLICABLE' | 'NOT_APPLICABLE';
+export type ArchiveWorkflowStatus = '未提交' | '草稿' | '初审中' | '终审中' | '已通过' | '退回修改';
+
+export interface ArchiveSubmission {
+  id: string;
+  requirementId: string;
+  ownerType: 'PROJECT_PUBLIC' | 'TOPIC_NATIONAL' | 'SELF_FUNDED';
+  ownerId: string;
+  topicId?: string;
+  applicability: ArchiveApplicability;
+  nonApplicableReason?: string;
+  status: ArchiveWorkflowStatus;
+  fileIds: string[];
+  version: number;
+  submittedAt?: string;
+  updatedAt: string;
 }
 
 // 统计
@@ -209,13 +235,80 @@ export interface ApprovalValidation {
 }
 
 // 用户与认证
-export type UserRole = '系统管理员' | '项目管理人员' | '课题用户' | '成果审批人员';
+export type UserRole =
+  | '系统管理员' | '项目技术负责人' | '科研助理' | '课题牵头单位'
+  | '项目管理人员' | '课题用户' | '成果审批人员';
 
 export interface User {
   id: string; username: string; password: string; name: string;
-  unitId: string; phone?: string; email?: string;
+  unitId?: string; topicId?: string; phone?: string; email?: string;
   role: UserRole; enabled: boolean;
   createdAt: string; lastLoginAt?: string;
+}
+
+export type ApprovalStage = 'PRE_REVIEW' | 'FORMAL' | 'REPORT' | 'ARCHIVE';
+export type ApprovalLevel = 'INITIAL' | 'FINAL';
+export type ApprovalDecision = 'APPROVED' | 'RETURNED';
+
+export interface ApprovalRecord {
+  id: string;
+  businessType: 'ACHIEVEMENT' | 'REPORT' | 'ARCHIVE';
+  businessId: string;
+  stage: ApprovalStage;
+  level: ApprovalLevel;
+  decision: ApprovalDecision;
+  opinion: string;
+  operatorId: string;
+  operatedAt: string;
+  submittedVersion: number;
+}
+
+export type ReportType = 'MONTHLY' | 'QUARTERLY';
+export type ReportStatus = '未填报' | '草稿' | '初审中' | '终审中' | '已通过' | '退回修改';
+
+export interface ReportTask {
+  id: string;
+  topicId: string;
+  reportType: ReportType;
+  year: number;
+  period: number;
+  deadline: string;
+}
+
+export interface ProgressReport {
+  id: string;
+  taskId: string;
+  topicId: string;
+  reportType: ReportType;
+  milestoneProgress: string;
+  overallProgress: string;
+  demonstrationProgress: string;
+  fundUsage: string;
+  nextPlan: string;
+  problemsAndMeasures: string;
+  status: ReportStatus;
+  overdue: boolean;
+  version: number;
+  submittedAt?: string;
+  updatedAt: string;
+}
+
+export type SelfFundedProjectType = '科技项目' | '技改项目' | '基建项目';
+
+export interface SelfFundedProject {
+  id: string;
+  topicId: string;
+  code: string;
+  name: string;
+  projectType: SelfFundedProjectType;
+  principalName: string;
+  implementingUnit: string;
+  startDate?: string;
+  endDate?: string;
+  budget?: number;
+  status: '筹备中' | '实施中' | '验收中' | '已完成';
+  templateSnapshotId: string;
+  remarks?: string;
 }
 
 export interface AuthState {
