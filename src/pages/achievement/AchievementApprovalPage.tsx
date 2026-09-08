@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, Button, Card, Descriptions, Drawer, Input, Modal, Space, Table, Tabs, Tag, Typography, message } from 'antd';
 import { CheckOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons';
-import type { Achievement, AchievementWorkflowStatus } from '../../types';
+import type { Achievement } from '../../types';
 import { useAppStore } from '../../store';
 import type { AchievementAction } from '../../domain/workflows';
 import { canPerform, filterByTopicScope } from '../../domain/permissions';

@@ -114,6 +114,10 @@ export function canAccessTopic(user: User, topicId?: string): boolean {
   return scope === 'ALL' || topicIds.includes(topicId);
 }
 
-export function filterByTopicScope<T extends { topicId?: string }>(user: User, records: T[]): T[] {
-  return records.filter((record) => canAccessTopic(user, record.topicId));
+export function filterByTopicScope<T extends object>(user: User, records: T[]): T[] {
+  return records.filter((record) => {
+    const scoped = record as { id?: string; topicId?: string; leadingUnitId?: string };
+    const topicId = scoped.topicId ?? (scoped.leadingUnitId ? scoped.id : undefined);
+    return canAccessTopic(user, topicId);
+  });
 }
