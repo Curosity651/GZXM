@@ -1,8 +1,9 @@
 import type {
   Achievement, AchievementMaterial, ArchiveCategory, ArchiveMaterial, ArchiveRequirement,
   IndicatorConfig, Project, ProjectUnit, ApprovalRecord, ReportTask, ProgressReport,
-  SelfFundedProject, ArchiveSubmission, TimeNode, Topic, WarningRule, User,
+  SelfFundedProject, ArchiveSubmission, TimeNode, Topic, WarningRule, User, RbacRole,
 } from '../types';
+import { ALL_ACTION_PERMISSIONS, ALL_PAGE_PERMISSIONS } from '../domain/permissions';
 
 export const MOCK_PROJECT: Project = { id: 'p1', name: '国家科技重大专项示范', code: 'GZ-2025-001', startDate: '2025-01-01', endDate: '2028-12-31' };
 
@@ -202,15 +203,22 @@ export const MOCK_WORKFLOW_ACHIEVEMENTS: Achievement[] = [
   },
 ];
 
+export const MOCK_ROLES: RbacRole[] = [
+  { id: 'role-system-admin', code: 'system-admin', name: '系统管理员', description: '账号、权限、字典和系统配置', pagePermissions: ALL_PAGE_PERMISSIONS, actionPermissions: ALL_ACTION_PERMISSIONS, enabled: true, builtIn: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-project-leader', code: 'project-leader', name: '项目技术负责人', description: '业务终审与全局进度查看', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['achievement.final.approve', 'report.final.approve', 'archive.final.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-research-assistant', code: 'research-assistant', name: '科研助理', description: '指标配置、业务初审与项目公共材料归档', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'warning-rules', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['topic.manage', 'indicator.manage', 'warning.manage', 'achievement.initial.approve', 'report.initial.approve', 'archive.public.submit', 'archive.initial.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-topic-unit', code: 'topic-unit', name: '课题牵头单位', description: '课题成果、月季报和归档材料填报', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'report-management', 'progress-overview', 'topic-archive', 'self-funded-archive', 'archive-monitoring'], actionPermissions: ['achievement.submit', 'report.submit', 'archive.topic.submit', 'self-funded.manage'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+];
+
 export const MOCK_USERS: User[] = [
-  { id: 'user-admin', username: 'admin', password: 'admin123', name: '系统管理员', unitId: 'u-sgcc', phone: '13800000001', email: 'admin@sgcc.com.cn', role: '系统管理员', enabled: true, createdAt: '2025-01-01', lastLoginAt: '2025-06-01' },
-  { id: 'user-leader', username: 'leader', password: 'leader123', name: '项目技术负责人', unitId: 'u-sgcc', phone: '13800000002', email: 'leader@sgcc.com.cn', role: '项目技术负责人', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-assistant', username: 'assistant', password: 'assistant123', name: '科研助理（董）', unitId: 'u-sgcc', phone: '13800000003', email: 'assistant@sgcc.com.cn', role: '科研助理', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-1', username: 'topic01', password: 'topic123', name: '课题一牵头单位', unitId: 'u-tsinghua', topicId: 't1', phone: '13800000101', email: 'topic01@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-2', username: 'topic02', password: 'topic123', name: '课题二牵头单位', unitId: 'u-pku', topicId: 't2', phone: '13800000102', email: 'topic02@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-3', username: 'topic03', password: 'topic123', name: '课题三牵头单位', unitId: 'u-ict', topicId: 't3', phone: '13800000103', email: 'topic03@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-4', username: 'topic04', password: 'topic123', name: '课题四牵头单位', unitId: 'u-sgcc', topicId: 't4', phone: '13800000104', email: 'topic04@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-5', username: 'topic05', password: 'topic123', name: '课题五牵头单位', unitId: 'u-hust', topicId: 't5', phone: '13800000105', email: 'topic05@mock.local', role: '课题牵头单位', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-admin', username: 'admin', password: 'admin123', name: '系统管理员', unitId: 'u-sgcc', phone: '13800000001', email: 'admin@sgcc.com.cn', role: '系统管理员', roleId: 'role-system-admin', dataScope: 'ALL', topicIds: [], enabled: true, createdAt: '2025-01-01', lastLoginAt: '2025-06-01' },
+  { id: 'user-leader', username: 'leader', password: 'leader123', name: '项目技术负责人', unitId: 'u-sgcc', phone: '13800000002', email: 'leader@sgcc.com.cn', role: '项目技术负责人', roleId: 'role-project-leader', dataScope: 'ALL', topicIds: [], enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-assistant', username: 'assistant', password: 'assistant123', name: '科研助理（董）', unitId: 'u-sgcc', phone: '13800000003', email: 'assistant@sgcc.com.cn', role: '科研助理', roleId: 'role-research-assistant', dataScope: 'ALL', topicIds: [], enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-1', username: 'topic01', password: 'topic123', name: '课题一牵头单位', unitId: 'u-tsinghua', topicId: 't1', topicIds: ['t1'], dataScope: 'TOPICS', phone: '13800000101', email: 'topic01@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-2', username: 'topic02', password: 'topic123', name: '课题二牵头单位', unitId: 'u-pku', topicId: 't2', topicIds: ['t2'], dataScope: 'TOPICS', phone: '13800000102', email: 'topic02@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-3', username: 'topic03', password: 'topic123', name: '课题三牵头单位', unitId: 'u-ict', topicId: 't3', topicIds: ['t3'], dataScope: 'TOPICS', phone: '13800000103', email: 'topic03@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-4', username: 'topic04', password: 'topic123', name: '课题四牵头单位', unitId: 'u-sgcc', topicId: 't4', topicIds: ['t4'], dataScope: 'TOPICS', phone: '13800000104', email: 'topic04@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-topic-5', username: 'topic05', password: 'topic123', name: '课题五牵头单位', unitId: 'u-hust', topicId: 't5', topicIds: ['t5'], dataScope: 'TOPICS', phone: '13800000105', email: 'topic05@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
 ];
 
 export const MOCK_ARCHIVE_CATEGORIES: ArchiveCategory[] = [

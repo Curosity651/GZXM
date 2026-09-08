@@ -5,17 +5,18 @@ import type { StateCreator } from 'zustand';
 import type {
   Achievement, ApprovalRecord, ArchiveCategory, ArchiveMaterial, ArchiveRequirement, ArchiveSubmission,
   IndicatorConfig, ProgressReport, Project, ProjectUnit, ReportTask, SelfFundedProject, TimeNode, Topic,
-  TopicPowerGridRequirement, User, UserRole, WarningRule,
+  TopicPowerGridRequirement, User, UserRole, WarningRule, RbacRole,
 } from '../types';
 import {
   MOCK_ACHIEVEMENTS, MOCK_APPROVAL_RECORDS, MOCK_ARCHIVE_CATEGORIES, MOCK_ARCHIVE_MATERIALS,
   MOCK_ARCHIVE_REQUIREMENTS, MOCK_ARCHIVE_SUBMISSIONS, MOCK_INDICATORS, MOCK_PROJECT, MOCK_REPORTS,
   MOCK_REPORT_TASKS, MOCK_SELF_FUNDED_PROJECTS, MOCK_TIME_NODES, MOCK_TOPICS,
-  MOCK_TOPIC_POWER_GRID_REQUIREMENTS, MOCK_UNITS, MOCK_USERS, MOCK_WARNING_RULES, MOCK_WORKFLOW_ACHIEVEMENTS,
+  MOCK_TOPIC_POWER_GRID_REQUIREMENTS, MOCK_UNITS, MOCK_USERS, MOCK_WARNING_RULES, MOCK_WORKFLOW_ACHIEVEMENTS, MOCK_ROLES,
 } from '../data/mock';
 import { nextAchievementStatus, type AchievementAction } from '../domain/workflows';
 import { nextReportStatus, type ReportAction } from '../domain/report-flow';
 import { nextArchiveStatus, type ArchiveAction } from '../domain/archive-flow';
+import { canAccessTopic, canPerform, filterByTopicScope, getRole } from '../domain/permissions';
 
 export interface AppData {
   project: Project;
@@ -34,6 +35,7 @@ export interface AppData {
   archiveRequirements: ArchiveRequirement[];
   archiveSubmissions: ArchiveSubmission[];
   topicPowerGridRequirements: TopicPowerGridRequirement[];
+  roles: RbacRole[];
   users: User[];
   currentUser: User | null;
 }
@@ -89,6 +91,10 @@ export interface AppState extends AppData {
   removeUser: (id: string) => void;
   resetUserPassword: (id: string) => void;
   toggleUserEnabled: (id: string, enabled: boolean) => void;
+  addRole: (role: RbacRole) => void;
+  updateRole: (id: string, updates: Partial<RbacRole>) => void;
+  toggleRoleEnabled: (id: string, enabled: boolean) => void;
+  removeRole: (id: string) => void;
   resetToMock: () => void;
 }
 
@@ -119,13 +125,14 @@ export function createInitialState(): AppData {
     archiveRequirements: MOCK_ARCHIVE_REQUIREMENTS,
     archiveSubmissions: MOCK_ARCHIVE_SUBMISSIONS,
     topicPowerGridRequirements: MOCK_TOPIC_POWER_GRID_REQUIREMENTS,
+    roles: MOCK_ROLES,
     users: MOCK_USERS,
     currentUser: null,
   });
 }
 
 export function visibleTopics(user: User, topics: Topic[]): Topic[] {
-  return user.role === '课题牵头单位' ? topics.filter((topic) => topic.id === user.topicId) : topics;
+  return filterByTopicScope(user, topics);
 }
 
 const stateCreator: StateCreator<AppState> = (set, get) => ({
@@ -159,7 +166,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const current = get().achievements.find((achievement) => achievement.id === id);
     const operator = get().users.find((user) => user.id === operatorId);
     if (!current || !operator) throw new Error('成果或操作人不存在');
-    if (operator.role !== '课题牵头单位' || operator.topicId !== current.topicId) throw new Error('只能提交本课题成果');
+    if (!canPerform(operator, get().roles, 'achievement.submit') || !canAccessTopic(operator, current.topicId)) throw new Error('没有该课题成果的提交权限');
     if (!['SUBMIT_PRE_REVIEW', 'START_FORMAL', 'SUBMIT_FORMAL'].includes(action)) throw new Error('该动作不是成果提交动作');
     const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
     set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? {
@@ -173,8 +180,8 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const operator = get().users.find((user) => user.id === operatorId);
     if (!operator) throw new Error('审批人不存在');
     const atFinalLevel = current.status.includes('终审中');
-    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && operator.role !== '科研助理') throw new Error('仅科研助理可以初审');
-    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && operator.role !== '项目技术负责人') throw new Error('仅项目技术负责人可以终审');
+    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && !canPerform(operator, get().roles, 'achievement.initial.approve')) throw new Error('没有成果初审权限');
+    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && !canPerform(operator, get().roles, 'achievement.final.approve')) throw new Error('没有成果终审权限');
     const workflowStatuses = ['预审草稿', '预审初审中', '预审终审中', '预审退回', '预审通过', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', '已生效'];
     if (!workflowStatuses.includes(current.status)) throw new Error('该成果仍使用旧版流程，不能执行新版审批');
     const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
@@ -203,7 +210,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const report = get().reports.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
     if (!report || !operator) throw new Error('报告或操作人不存在');
-    if (operator.role !== '课题牵头单位' || operator.topicId !== report.topicId) throw new Error('只能提交本课题报告');
+    if (!canPerform(operator, get().roles, 'report.submit') || !canAccessTopic(operator, report.topicId)) throw new Error('没有该课题报告的提交权限');
     const status = nextReportStatus(report.status, 'SUBMIT');
     set((state) => ({ reports: state.reports.map((item) => item.id === id ? { ...item, status, submittedAt: today(), updatedAt: today() } : item) }));
   },
@@ -212,8 +219,8 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const operator = get().users.find((item) => item.id === operatorId);
     if (!report || !operator) throw new Error('报告或审批人不存在');
     const atFinalLevel = report.status === '终审中';
-    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && operator.role !== '科研助理') throw new Error('仅科研助理可以初审报告');
-    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && operator.role !== '项目技术负责人') throw new Error('仅项目技术负责人可以终审报告');
+    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && !canPerform(operator, get().roles, 'report.initial.approve')) throw new Error('没有报告初审权限');
+    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && !canPerform(operator, get().roles, 'report.final.approve')) throw new Error('没有报告终审权限');
     const status = nextReportStatus(report.status, action);
     const record: ApprovalRecord = {
       id: `approval-${Date.now()}-${id}`, businessType: 'REPORT', businessId: id, stage: 'REPORT',
@@ -227,7 +234,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   },
   addSelfFundedProject: (project, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!operator || operator.role !== '课题牵头单位' || operator.topicId !== project.topicId) throw new Error('只能在本课题下新建配套自筹项目');
+    if (!operator || !canPerform(operator, get().roles, 'self-funded.manage') || !canAccessTopic(operator, project.topicId)) throw new Error('没有该课题配套自筹项目的维护权限');
     set((state) => ({ selfFundedProjects: [...state.selfFundedProjects, project] }));
   },
   saveArchiveSubmission: (submission) => set((state) => ({
@@ -239,8 +246,8 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const submission = get().archiveSubmissions.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
     if (!submission || !operator) throw new Error('归档记录或操作人不存在');
-    const canSubmitPublic = submission.ownerType === 'PROJECT_PUBLIC' && operator.role === '科研助理';
-    const canSubmitTopic = submission.ownerType !== 'PROJECT_PUBLIC' && operator.role === '课题牵头单位' && operator.topicId === submission.topicId;
+    const canSubmitPublic = submission.ownerType === 'PROJECT_PUBLIC' && canPerform(operator, get().roles, 'archive.public.submit');
+    const canSubmitTopic = submission.ownerType !== 'PROJECT_PUBLIC' && canPerform(operator, get().roles, 'archive.topic.submit') && canAccessTopic(operator, submission.topicId);
     if (!canSubmitPublic && !canSubmitTopic) throw new Error('没有该归档记录的提交权限');
     const status = nextArchiveStatus(submission.ownerType, submission.status, 'SUBMIT');
     set((state) => ({ archiveSubmissions: state.archiveSubmissions.map((item) => item.id === id ? { ...item, status, submittedAt: today(), updatedAt: today() } : item) }));
@@ -250,8 +257,8 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const operator = get().users.find((item) => item.id === operatorId);
     if (!submission || !operator) throw new Error('归档记录或审批人不存在');
     const atFinalLevel = submission.status === '终审中';
-    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && operator.role !== '科研助理') throw new Error('仅科研助理可以初审归档材料');
-    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && operator.role !== '项目技术负责人') throw new Error('仅项目技术负责人可以终审归档材料');
+    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && !canPerform(operator, get().roles, 'archive.initial.approve')) throw new Error('没有归档材料初审权限');
+    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && !canPerform(operator, get().roles, 'archive.final.approve')) throw new Error('没有归档材料终审权限');
     const status = nextArchiveStatus(submission.ownerType, submission.status, action);
     const record: ApprovalRecord = {
       id: `approval-${Date.now()}-${id}`, businessType: 'ARCHIVE', businessId: id, stage: 'ARCHIVE',
@@ -279,6 +286,9 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const user = get().users.find((item) => item.username === username && item.password === password);
     if (!user) return { success: false, error: '用户名或密码错误' };
     if (!user.enabled) return { success: false, error: '该账号已被禁用' };
+    const role = getRole(user, get().roles);
+    if (!role) return { success: false, error: '该账号尚未分配角色' };
+    if (!role.enabled) return { success: false, error: '该账号所属角色已被停用' };
     const updatedUser = { ...user, lastLoginAt: today() };
     set((state) => ({ currentUser: updatedUser, users: state.users.map((item) => item.id === user.id ? updatedUser : item) }));
     return { success: true };
@@ -289,6 +299,14 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   removeUser: (id) => set((state) => ({ users: state.users.filter((user) => user.id !== id) })),
   resetUserPassword: (id) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, password: '123456' } : user) })),
   toggleUserEnabled: (id, enabled) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, enabled } : user) })),
+  addRole: (role) => set((state) => ({ roles: [...state.roles, role] })),
+  updateRole: (id, updates) => set((state) => ({ roles: state.roles.map((role) => role.id === id && !role.builtIn ? { ...role, ...updates, updatedAt: new Date().toISOString() } : role) })),
+  toggleRoleEnabled: (id, enabled) => set((state) => ({ roles: state.roles.map((role) => role.id === id && !role.builtIn ? { ...role, enabled, updatedAt: new Date().toISOString() } : role) })),
+  removeRole: (id) => set((state) => {
+    const role = state.roles.find((item) => item.id === id);
+    if (!role || role.builtIn || state.users.some((user) => user.roleId === id)) return {};
+    return { roles: state.roles.filter((item) => item.id !== id) };
+  }),
   resetToMock: () => set(createInitialState()),
 });
 
@@ -301,7 +319,7 @@ export function createAppStore() {
 }
 
 export const useAppStore = create<AppState>()(
-  persist(stateCreator, { name: 'gzxm-research-management-v1', version: 1 }),
+  persist(stateCreator, { name: 'gzxm-research-management-v2', version: 2 }),
 );
 
 export const canEditAchievement = (status: string): boolean => ['草稿', '退回修改', '预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(status);

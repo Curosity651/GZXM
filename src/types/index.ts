@@ -238,10 +238,41 @@ export interface ApprovalValidation {
 export type UserRole =
   | '系统管理员' | '项目技术负责人' | '科研助理' | '课题牵头单位';
 
+export type DataScope = 'ALL' | 'TOPICS';
+
+export type PagePermissionKey =
+  | 'home' | 'topic-indicator' | 'indicator-monitoring' | 'warning-rules'
+  | 'achievement-entry' | 'achievement-review' | 'achievement-query'
+  | 'report-management' | 'report-review' | 'progress-overview'
+  | 'project-public-archive' | 'topic-archive' | 'self-funded-archive'
+  | 'archive-review' | 'archive-monitoring'
+  | 'user-management' | 'role-permission' | 'dictionary' | 'system-config';
+
+export type ActionPermissionKey =
+  | 'topic.manage' | 'indicator.manage' | 'warning.manage'
+  | 'achievement.submit' | 'achievement.initial.approve' | 'achievement.final.approve'
+  | 'report.submit' | 'report.initial.approve' | 'report.final.approve'
+  | 'archive.public.submit' | 'archive.topic.submit' | 'archive.initial.approve' | 'archive.final.approve'
+  | 'self-funded.manage' | 'system.manage';
+
+export interface RbacRole {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  pagePermissions: PagePermissionKey[];
+  actionPermissions: ActionPermissionKey[];
+  enabled: boolean;
+  builtIn: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface User {
   id: string; username: string; password: string; name: string;
   unitId?: string; topicId?: string; phone?: string; email?: string;
   role: UserRole; enabled: boolean;
+  roleId?: string; dataScope?: DataScope; topicIds?: string[];
   createdAt: string; lastLoginAt?: string;
 }
 
