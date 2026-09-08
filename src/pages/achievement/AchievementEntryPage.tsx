@@ -5,6 +5,7 @@ import type { UploadFile } from 'antd';
 import { ACHIEVEMENT_TYPES, type Achievement, type AchievementType } from '../../types';
 import { useAppStore } from '../../store';
 import { initialAchievementStatus, isEditableAchievementStatus } from '../../domain/achievement';
+import { canPerform, filterByTopicScope } from '../../domain/permissions';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatusTag } from '../../components/common/StatusTag';
 
@@ -13,12 +14,13 @@ type FormValues = Partial<Achievement> & { uploads?: UploadFile[] };
 export function AchievementEntryPage() {
   const state = useAppStore();
   const user = state.currentUser!;
+  const canSubmit = canPerform(user.role, 'achievement.submit');
   const topic = state.topics.find((item) => item.id === user.topicId);
   const [form] = Form.useForm<FormValues>();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Achievement | null>(null);
   const type = Form.useWatch('achievementType', form) as AchievementType | undefined;
-  const achievements = useMemo(() => state.achievements.filter((item) => item.topicId === user.topicId), [state.achievements, user.topicId]);
+  const achievements = useMemo(() => filterByTopicScope(user, state.achievements), [state.achievements, user]);
 
   const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ achievementType: '学术论文', responsiblePerson: topic?.principalName, projectLabeling: `${state.project.name}（${state.project.code}）` }); setOpen(true); };
   const openEdit = (item: Achievement) => { setEditing(item); form.setFieldsValue(item); setOpen(true); };
@@ -46,21 +48,25 @@ export function AchievementEntryPage() {
   };
 
   return <>
-    <PageHeader title="成果填报" description={`${topic?.name ?? '本课题'} · 论文、专利、软著和标准先预审，人才培养直接进入正式审批。`} extra={<Button type="primary" icon={<FileAddOutlined />} onClick={openCreate}>新增成果</Button>} />
-    <Alert type="warning" showIcon message="投稿或申请前请先完成预审，重点核对成果名称、人员顺序、单位排序和项目标注。预审通过不计入指标。" style={{ marginBottom: 16 }} />
+    <PageHeader
+      title="成果填报"
+      description={canSubmit ? `${topic?.name ?? '本课题'} · 论文、专利、软著和标准先预审，人才培养直接进入正式审批。` : '全部课题成果 · 系统管理员只读查看，不参与成果提交或审批。'}
+      extra={canSubmit ? <Button type="primary" icon={<FileAddOutlined />} onClick={openCreate}>新增成果</Button> : undefined}
+    />
+    <Alert type="warning" showIcon title="投稿或申请前请先完成预审，重点核对成果名称、人员顺序、单位排序和项目标注。预审通过不计入指标。" style={{ marginBottom: 16 }} />
     <Card><Table rowKey="id" dataSource={achievements} columns={[
       { title: '成果名称', dataIndex: 'title', render: (value, row) => <div><b>{value}</b><div><Tag>{row.achievementType}</Tag></div></div> },
       { title: '负责人', dataIndex: 'responsiblePerson', width: 110 },
       { title: '当前阶段', dataIndex: 'status', width: 150, render: (value) => <StatusTag status={value} /> },
       { title: '关联节点', dataIndex: 'nodeId', width: 120, render: (value) => state.nodes.find((item) => item.id === value)?.name ?? '未关联' },
       { title: '更新时间', dataIndex: 'updatedAt', width: 120, render: (value) => value?.slice(0, 10) },
-      { title: '操作', width: 210, render: (_, row) => <Space>
+      { title: '操作', width: 210, render: (_, row) => canSubmit ? <Space>
         {isEditableAchievementStatus(row.status) && <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>编辑</Button>}
         {['预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(row.status) && <Button type="link" icon={<SendOutlined />} onClick={() => submit(row)}>提交</Button>}
         {row.status === '预审通过' && <Button type="primary" size="small" onClick={() => submit(row)}>补录正式材料</Button>}
-      </Space> },
+      </Space> : <Tag>只读</Tag> },
     ]} /></Card>
-    <Drawer width={720} title={editing ? '编辑成果' : '新增成果'} open={open} onClose={() => setOpen(false)} extra={<Space><Button onClick={() => setOpen(false)}>取消</Button><Button type="primary" onClick={save}>保存草稿</Button></Space>}>
+    <Drawer size={720} title={editing ? '编辑成果' : '新增成果'} open={open} onClose={() => setOpen(false)} extra={<Space><Button onClick={() => setOpen(false)}>取消</Button><Button type="primary" onClick={save}>保存草稿</Button></Space>}>
       <Form form={form} layout="vertical">
         <Row gutter={16}><Col span={12}><Form.Item label="成果类型" name="achievementType" rules={[{ required: true }]}><Select disabled={Boolean(editing)} options={ACHIEVEMENT_TYPES.map((item) => ({ label: item, value: item }))} /></Form.Item></Col><Col span={12}><Form.Item label="负责人" name="responsiblePerson" rules={[{ required: true }]}><Input /></Form.Item></Col></Row>
         <Form.Item label="成果名称" name="title" rules={[{ required: true, message: '请输入成果名称' }]}><Input placeholder="预审通过后，名称变更需要重新提交审批" /></Form.Item>

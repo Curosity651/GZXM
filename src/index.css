@@ -1,8 +1,54 @@
-﻿body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+:root {
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  color: #172033;
+  background: #f3f6fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
-#root {
-  min-height: 100vh;
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 1180px; min-height: 100vh; background: #f3f6fb; }
+button, input, textarea, select { font: inherit; }
+
+.app-shell { min-height: 100vh; }
+.app-sider { position: sticky !important; top: 0; height: 100vh; overflow: auto; background: linear-gradient(180deg, #10244b 0%, #07162f 100%) !important; }
+.brand-block { height: 82px; padding: 18px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.1); color: white; }
+.brand-mark { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: linear-gradient(135deg, #3f8cff, #69d6ff); box-shadow: 0 8px 22px rgba(47,127,255,.3); }
+.brand-title { font-size: 16px; font-weight: 700; letter-spacing: .5px; }
+.brand-subtitle { margin-top: 3px; font-size: 11px; color: rgba(255,255,255,.58); }
+.app-sider .ant-menu { background: transparent !important; padding: 10px 8px; }
+.app-sider .ant-menu-item, .app-sider .ant-menu-submenu-title { border-radius: 8px; margin-block: 3px; }
+.sider-foot { position: absolute; left: 16px; right: 16px; bottom: 14px; padding: 10px; color: rgba(255,255,255,.55); font-size: 11px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; }
+.app-header { height: 64px; padding: 0 24px !important; background: rgba(255,255,255,.96) !important; border-bottom: 1px solid #e9edf5; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px); }
+.app-content { padding: 24px 28px 40px; background: #f3f6fb; }
+.page-header { min-height: 64px; margin-bottom: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.page-header .ant-typography-secondary { display: block; margin-top: 5px; }
+.ant-card { border: 1px solid #e7ecf4; box-shadow: 0 5px 18px rgba(28,56,100,.045); }
+.ant-table-wrapper .ant-table-thead > tr > th { background: #f7f9fc; color: #4f5d73; font-weight: 600; }
+.metric-card { min-height: 104px; }
+.metric-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; }
+.mini-stat { text-align: center; min-height: 124px; }
+.mini-stat-value { margin: 8px 0 2px; font-size: 28px; line-height: 1; font-weight: 700; color: #172b4d; }
+.empty-compact { padding: 38px 0; text-align: center; color: #9aa6b6; font-size: 28px; }
+.empty-compact p { margin: 8px 0 0; font-size: 13px; }
+
+.login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(520px, 1.25fr) minmax(460px, .75fr); background: #eff4fb; }
+.login-hero { position: relative; overflow: hidden; padding: 13vh 8vw; color: white; background: radial-gradient(circle at 20% 20%, rgba(72,168,255,.55), transparent 34%), radial-gradient(circle at 80% 70%, rgba(65,231,189,.22), transparent 28%), linear-gradient(135deg, #071b3d 0%, #123d79 58%, #0b5c8a 100%); }
+.login-hero::after { content: ""; position: absolute; width: 520px; height: 520px; right: -150px; bottom: -170px; border: 1px solid rgba(255,255,255,.15); border-radius: 50%; box-shadow: 0 0 0 70px rgba(255,255,255,.025), 0 0 0 140px rgba(255,255,255,.018); }
+.login-emblem { width: 64px; height: 64px; margin-bottom: 34px; display: grid; place-items: center; border-radius: 18px; font-size: 32px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); }
+.login-kicker { color: #8ed7ff !important; font-size: 15px; letter-spacing: 5px; }
+.login-title { max-width: 640px; margin: 18px 0 !important; color: white !important; font-size: clamp(38px, 4vw, 62px) !important; line-height: 1.12 !important; }
+.login-copy { max-width: 620px; color: rgba(255,255,255,.72) !important; font-size: 17px; line-height: 1.9; }
+.login-metric-row { margin-top: 56px; display: flex; gap: 54px; }
+.login-metric-row div { display: flex; flex-direction: column; }
+.login-metric-row b { font-size: 30px; }
+.login-metric-row span { color: rgba(255,255,255,.58); font-size: 12px; }
+.login-card { width: 430px; align-self: center; justify-self: center; padding: 14px; border-radius: 18px; box-shadow: 0 24px 65px rgba(22,53,94,.16); }
+.demo-accounts { margin-top: 24px; padding-top: 20px; border-top: 1px solid #edf0f5; }
+.account-chip { width: 100%; padding: 8px; display: flex; align-items: center; justify-content: space-between; gap: 4px; color: #58677c; border: 1px solid #e6ebf2; border-radius: 8px; background: #fafcff; cursor: pointer; }
+.account-chip:hover { border-color: #69a8ff; background: #f2f7ff; }
+
+@media (max-width: 1280px) {
+  .app-content { padding-inline: 20px; }
+  .login-hero { padding-inline: 6vw; }
 }

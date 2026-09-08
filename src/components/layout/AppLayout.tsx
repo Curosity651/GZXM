@@ -57,6 +57,7 @@ const menuTree: MenuNode[] = [
   {
     key: 'admin-group', label: '系统管理', icon: <SettingOutlined />, children: [
       { key: '/admin/users', label: <Link to="/admin/users">用户管理</Link>, page: 'user-management' },
+      { key: '/admin/config', label: <Link to="/admin/config">系统配置</Link>, page: 'system-config' },
     ],
   },
 ];

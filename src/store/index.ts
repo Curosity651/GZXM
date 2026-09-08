@@ -39,6 +39,7 @@ export interface AppData {
 }
 
 export interface AppState extends AppData {
+  updateProject: (updates: Partial<Project>) => void;
   addUnit: (unit: ProjectUnit) => void;
   updateUnit: (id: string, updates: Partial<ProjectUnit>) => void;
   removeUnit: (id: string) => void;
@@ -92,6 +93,15 @@ export interface AppState extends AppData {
 }
 
 export function createInitialState(): AppData {
+  const normalizedAchievements = MOCK_ACHIEVEMENTS.map((achievement): Achievement => {
+    const statusMap: Record<string, Achievement['status']> = {
+      草稿: achievement.achievementType === '人才培养' ? '正式成果草稿' : '预审草稿',
+      已提交: '预审初审中', 审批中: '预审初审中', 审批通过: '已生效',
+      审批不通过: '预审退回', 退回修改: '预审退回',
+    };
+    const status = statusMap[achievement.status] ?? achievement.status;
+    return { ...achievement, status, countsToIndicator: status === '已生效' };
+  });
   return structuredClone({
     project: MOCK_PROJECT,
     units: MOCK_UNITS,
@@ -99,7 +109,7 @@ export function createInitialState(): AppData {
     nodes: MOCK_TIME_NODES,
     indicators: MOCK_INDICATORS,
     warningRules: MOCK_WARNING_RULES,
-    achievements: [...MOCK_ACHIEVEMENTS, ...MOCK_WORKFLOW_ACHIEVEMENTS],
+    achievements: [...normalizedAchievements, ...MOCK_WORKFLOW_ACHIEVEMENTS],
     approvalRecords: MOCK_APPROVAL_RECORDS,
     reportTasks: MOCK_REPORT_TASKS,
     reports: MOCK_REPORTS,
@@ -120,6 +130,7 @@ export function visibleTopics(user: User, topics: Topic[]): Topic[] {
 
 const stateCreator: StateCreator<AppState> = (set, get) => ({
   ...createInitialState(),
+  updateProject: (updates) => set((state) => ({ project: { ...state.project, ...updates } })),
   addUnit: (unit) => set((state) => ({ units: [...state.units, unit] })),
   updateUnit: (id, updates) => set((state) => ({ units: state.units.map((unit) => unit.id === id ? { ...unit, ...updates } : unit) })),
   removeUnit: (id) => set((state) => ({ units: state.units.filter((unit) => unit.id !== id) })),

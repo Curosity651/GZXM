@@ -236,8 +236,7 @@ export interface ApprovalValidation {
 
 // 用户与认证
 export type UserRole =
-  | '系统管理员' | '项目技术负责人' | '科研助理' | '课题牵头单位'
-  | '项目管理人员' | '课题用户' | '成果审批人员';
+  | '系统管理员' | '项目技术负责人' | '科研助理' | '课题牵头单位';
 
 export interface User {
   id: string; username: string; password: string; name: string;

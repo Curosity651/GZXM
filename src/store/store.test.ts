@@ -8,6 +8,11 @@ describe('Mock 数据范围', () => {
     expect(user?.role).toBe('课题牵头单位');
     expect(visibleTopics(user!, state.topics).map((topic) => topic.id)).toEqual(['t1']);
   });
+
+  it('初始化数据不再暴露旧版单层审批状态', () => {
+    const legacy = new Set(['草稿', '已提交', '审批中', '审批通过', '审批不通过', '退回修改']);
+    expect(createInitialState().achievements.every((item) => !legacy.has(item.status))).toBe(true);
+  });
 });
 
 describe('成果审批记录', () => {

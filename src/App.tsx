@@ -18,12 +18,13 @@ import { TopicArchivePage } from './pages/archive/TopicArchivePage';
 import { SelfFundedProjectPage } from './pages/archive/SelfFundedProjectPage';
 import { ArchiveApprovalPage } from './pages/archive/ArchiveApprovalPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
+import { SystemConfigPage } from './pages/admin/SystemConfigPage';
 import { ReportManagementPage } from './pages/report/ReportManagementPage';
 import { ReportApprovalPage } from './pages/report/ReportApprovalPage';
 
 function App() {
   return (
-    <ConfigProvider locale={zhCN} theme={{ algorithm: theme.defaultAlgorithm }}>
+    <ConfigProvider locale={zhCN} theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: '#246fe5', borderRadius: 10, colorBgLayout: '#f3f6fb', fontFamily: 'Inter, PingFang SC, Microsoft YaHei, sans-serif' }, components: { Card: { headerFontSize: 16 }, Table: { headerBg: '#f7f9fc' } } }}>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -49,6 +50,7 @@ function App() {
             <Route path="archive/approval" element={<ArchiveApprovalPage />} />
             <Route path="archive/monitoring" element={<ArchiveMonitoringPage />} />
             <Route path="admin/users" element={<UserManagementPage />} />
+            <Route path="admin/config" element={<SystemConfigPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

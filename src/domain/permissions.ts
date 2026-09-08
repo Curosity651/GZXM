@@ -17,7 +17,7 @@ export type ActionKey =
 
 const targetRoles: UserRole[] = ['系统管理员', '项目技术负责人', '科研助理', '课题牵头单位'];
 
-const pagePermissions: Record<Exclude<UserRole, '项目管理人员' | '课题用户' | '成果审批人员'>, PageKey[] | 'ALL'> = {
+const pagePermissions: Record<UserRole, PageKey[] | 'ALL'> = {
   系统管理员: 'ALL',
   项目技术负责人: [
     'home', 'topic-indicator', 'indicator-monitoring', 'achievement-review', 'achievement-query',

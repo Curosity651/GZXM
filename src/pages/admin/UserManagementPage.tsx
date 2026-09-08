@@ -1,190 +1,45 @@
 import { useState } from 'react';
-import {
-  Button, Card, Form, Input, message, Modal, Select, Space, Switch,
-  Table, Tag, Popconfirm,
-} from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined } from '@ant-design/icons';
-import { useAppStore } from '../../store';
+import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
+import { EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
 import type { User, UserRole } from '../../types';
+import { useAppStore } from '../../store';
+import { normalizeTopicBinding, validateTopicAccountUniqueness } from '../../domain/admin';
+import { PageHeader } from '../../components/common/PageHeader';
 
-const { Option } = Select;
-
-const ROLE_OPTIONS: UserRole[] = ['系统管理员', '项目管理人员', '课题用户', '成果审批人员'];
+const roles: UserRole[] = ['系统管理员', '项目技术负责人', '科研助理', '课题牵头单位'];
 
 export function UserManagementPage() {
-  const { users, units, currentUser, addUser, updateUser, removeUser, resetUserPassword, toggleUserEnabled } = useAppStore();
-
-  const [visible, setVisible] = useState(false);
+  const state = useAppStore();
+  const [form] = Form.useForm<Partial<User>>();
+  const role = Form.useWatch('role', form);
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
-  const [form] = Form.useForm();
-
-  const unitMap = Object.fromEntries(units.map((u) => [u.id, u.name]));
-
-  const openForm = (user?: User) => {
-    setEditing(user || null);
-    if (user) {
-      form.setFieldsValue({
-        username: user.username,
-        name: user.name,
-        unitId: user.unitId,
-        phone: user.phone || '',
-        email: user.email || '',
-        role: user.role,
-      });
-    } else {
-      form.resetFields();
+  const unitMap = Object.fromEntries(state.units.map((item) => [item.id, item.name]));
+  const topicMap = Object.fromEntries(state.topics.map((item) => [item.id, `${item.code} ${item.name}`]));
+  const openForm = (user?: User) => { setEditing(user ?? null); form.setFieldsValue(user ?? { role: '课题牵头单位', password: '123456' }); setOpen(true); };
+  const save = async () => {
+    const values = await form.validateFields();
+    const topicId = normalizeTopicBinding(values.role!, values.topicId);
+    if (values.role === '课题牵头单位') {
+      const error = validateTopicAccountUniqueness(state.users, topicId, editing?.id);
+      if (error) return message.warning(error);
     }
-    setVisible(true);
+    const payload = { ...values, topicId, unitId: values.role === '课题牵头单位' ? state.topics.find((item) => item.id === topicId)?.leadingUnitId : values.unitId };
+    if (editing) state.updateUser(editing.id, payload);
+    else state.addUser({ id: `user-${Date.now()}`, username: values.username!, password: values.password!, name: values.name!, role: values.role!, topicId, unitId: payload.unitId, phone: values.phone, email: values.email, enabled: true, createdAt: new Date().toISOString().slice(0, 10) });
+    message.success(editing ? '账号信息已更新' : '账号已创建'); setOpen(false); form.resetFields();
   };
-
-  const handleSave = (values: any) => {
-    if (editing) {
-      updateUser(editing.id, {
-        name: values.name,
-        unitId: values.unitId,
-        phone: values.phone || '',
-        email: values.email || '',
-        role: values.role,
-      });
-      message.success('用户信息更新成功');
-    } else {
-      addUser({
-        id: `user-${Date.now()}`,
-        username: values.username,
-        password: values.password || '123456',
-        name: values.name,
-        unitId: values.unitId,
-        phone: values.phone || '',
-        email: values.email || '',
-        role: values.role,
-        enabled: true,
-        createdAt: new Date().toISOString().split('T')[0],
-      });
-      message.success('用户添加成功');
-    }
-    setVisible(false);
-    setEditing(null);
-    form.resetFields();
-  };
-
-  const handleResetPassword = (userId: string) => {
-    resetUserPassword(userId);
-    message.success('密码已重置为 123456');
-  };
-
-  const handleToggleEnabled = (userId: string, enabled: boolean) => {
-    toggleUserEnabled(userId, enabled);
-    message.success(enabled ? '账号已启用' : '账号已禁用');
-  };
-
-  const handleDelete = (userId: string) => {
-    removeUser(userId);
-    message.success('用户已删除');
-  };
-
-  const columns = [
-    { title: '用户名', dataIndex: 'username', key: 'username' },
-    { title: '姓名', dataIndex: 'name', key: 'name' },
-    {
-      title: '所属单位',
-      dataIndex: 'unitId',
-      key: 'unitId',
-      render: (v: string) => unitMap[v] || v,
-    },
-    { title: '手机', dataIndex: 'phone', key: 'phone', render: (v: string) => v || '-' },
-    { title: '邮箱', dataIndex: 'email', key: 'email', render: (v: string) => v || '-' },
-    {
-      title: '角色',
-      dataIndex: 'role',
-      key: 'role',
-      render: (v: UserRole) => <Tag color={v === '系统管理员' ? 'red' : 'blue'}>{v}</Tag>,
-    },
-    {
-      title: '状态',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      render: (enabled: boolean, record: User) => (
-        <Switch
-          checked={enabled}
-          disabled={record.id === currentUser?.id}
-          onChange={(v) => handleToggleEnabled(record.id, v)}
-        />
-      ),
-    },
-    {
-      title: '最后登录',
-      dataIndex: 'lastLoginAt',
-      key: 'lastLoginAt',
-      render: (v: string) => v || '-',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: any, record: User) => (
-        <Space>
-          <Button icon={<EditOutlined />} size="small" onClick={() => openForm(record)}>编辑</Button>
-          <Popconfirm title="确定要重置密码为 123456？" onConfirm={() => handleResetPassword(record.id)}>
-            <Button icon={<KeyOutlined />} size="small">重置密码</Button>
-          </Popconfirm>
-          <Popconfirm
-            title="确定要删除该用户？"
-            disabled={record.id === currentUser?.id}
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Button icon={<DeleteOutlined />} danger size="small" disabled={record.id === currentUser?.id}>删除</Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
-  return (
-    <Card
-      title="用户管理"
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新增用户</Button>}
-    >
-      <Table rowKey="id" columns={columns} dataSource={users} pagination={{ pageSize: 10 }} />
-
-      <Modal
-        title={editing ? '编辑用户' : '新增用户'}
-        open={visible}
-        onOk={() => form.submit()}
-        onCancel={() => { setVisible(false); setEditing(null); form.resetFields(); }}
-      >
-        <Form form={form} layout="vertical" onFinish={handleSave}>
-          <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}>
-            <Input disabled={!!editing} placeholder="请输入用户名" />
-          </Form.Item>
-          {!editing && (
-            <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]} initialValue="123456">
-              <Input.Password placeholder="默认密码 123456" />
-            </Form.Item>
-          )}
-          <Form.Item label="姓名" name="name" rules={[{ required: true, message: '请输入姓名' }]}>
-            <Input placeholder="请输入姓名" />
-          </Form.Item>
-          <Form.Item label="所属单位" name="unitId" rules={[{ required: true, message: '请选择单位' }]}>
-            <Select placeholder="请选择所属单位">
-              {units.map((u) => (
-                <Option key={u.id} value={u.id}>{u.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="手机" name="phone">
-            <Input placeholder="请输入手机号" />
-          </Form.Item>
-          <Form.Item label="邮箱" name="email">
-            <Input placeholder="请输入邮箱" />
-          </Form.Item>
-          <Form.Item label="角色" name="role" rules={[{ required: true, message: '请选择角色' }]}>
-            <Select placeholder="请选择角色">
-              {ROLE_OPTIONS.map((r) => (
-                <Option key={r} value={r}>{r}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </Card>
-  );
+  return <>
+    <PageHeader title="用户管理" description="每个课题建立一个独立牵头单位账号；参与单位不创建账号。" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新增账号</Button>} />
+    <Card><Table rowKey="id" dataSource={state.users} columns={[
+      { title: '用户名', dataIndex: 'username', width: 120 }, { title: '显示名称', dataIndex: 'name' },
+      { title: '角色', dataIndex: 'role', width: 150, render: (value) => <Tag color={value === '系统管理员' ? 'purple' : value === '项目技术负责人' ? 'geekblue' : value === '科研助理' ? 'cyan' : 'green'}>{value}</Tag> },
+      { title: '绑定课题', dataIndex: 'topicId', render: (value) => value ? topicMap[value] : '全部课题' }, { title: '所属单位', dataIndex: 'unitId', render: (value) => unitMap[value] ?? '—' },
+      { title: '状态', dataIndex: 'enabled', width: 90, render: (value, user) => <Switch checked={value} disabled={user.id === state.currentUser?.id} onChange={(checked) => state.toggleUserEnabled(user.id, checked)} /> },
+      { title: '操作', width: 210, render: (_, user) => <Space><Button size="small" icon={<EditOutlined />} onClick={() => openForm(user)}>编辑</Button><Popconfirm title="确认将密码重置为 123456？" onConfirm={() => { state.resetUserPassword(user.id); message.success('密码已重置'); }}><Button size="small" icon={<KeyOutlined />}>重置密码</Button></Popconfirm></Space> },
+    ]} /></Card>
+    <Modal title={editing ? '编辑账号' : '新增账号'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} onOk={save} width={620}>
+      <Form form={form} layout="vertical"><Form.Item label="用户名" name="username" rules={[{ required: true }]}><Input disabled={Boolean(editing)} /></Form.Item>{!editing && <Form.Item label="初始密码" name="password" initialValue="123456" rules={[{ required: true }]}><Input.Password /></Form.Item>}<Form.Item label="显示名称" name="name" rules={[{ required: true }]}><Input /></Form.Item><Form.Item label="角色" name="role" rules={[{ required: true }]}><Select options={roles.map((item) => ({ label: item, value: item }))} /></Form.Item>{role === '课题牵头单位' && <Form.Item label="绑定课题" name="topicId" rules={[{ required: true }]}><Select options={state.topics.map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} /></Form.Item>}{role !== '课题牵头单位' && <Form.Item label="所属单位" name="unitId"><Select allowClear options={state.units.map((item) => ({ label: item.name, value: item.id }))} /></Form.Item>}<Form.Item label="手机" name="phone"><Input /></Form.Item><Form.Item label="邮箱" name="email"><Input /></Form.Item></Form>
+    </Modal>
+  </>;
 }
