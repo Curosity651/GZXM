@@ -1,72 +1,59 @@
 import { useState } from 'react';
-import { Button, Card, Form, Input, message, Typography, Alert } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Col, Form, Input, Row, Tag, Typography, message } from 'antd';
+import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store';
 
-const { Title } = Typography;
+const { Title, Paragraph, Text } = Typography;
+const demoAccounts = [
+  { role: '系统管理员', username: 'admin', password: 'admin123', color: 'purple' },
+  { role: '项目技术负责人', username: 'leader', password: 'leader123', color: 'geekblue' },
+  { role: '科研助理', username: 'assistant', password: 'assistant123', color: 'cyan' },
+  { role: '课题牵头单位', username: 'topic01', password: 'topic123', color: 'green' },
+];
 
 export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAppStore();
+  const login = useAppStore((state) => state.login);
+  const [form] = Form.useForm<{ username: string; password: string }>();
 
-  const handleSubmit = async (values: { username: string; password: string }) => {
+  const submit = async (values: { username: string; password: string }) => {
     setLoading(true);
-    try {
-      const result = await login(values.username, values.password);
-      if (result.success) {
-        message.success('登录成功');
-        navigate('/', { replace: true });
-      } else {
-        message.error(result.error || '登录失败');
-      }
-    } catch {
-      message.error('登录失败，请重试');
-    } finally {
-      setLoading(false);
-    }
+    const result = await login(values.username, values.password);
+    setLoading(false);
+    if (!result.success) return message.error(result.error);
+    message.success('登录成功');
+    navigate('/', { replace: true });
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    }}>
-      <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <Title level={3} style={{ margin: 0 }}>科研成果管理系统</Title>
-          <Typography.Text type="secondary">国家科技重大专项</Typography.Text>
-        </div>
-
-        <Alert
-          message="当前为本地演示版本，用户和业务数据保存在浏览器本地"
-          type="info"
-          showIcon
-          style={{ marginBottom: 24 }}
-        />
-
-        <Form onFinish={handleSubmit} size="large">
-          <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
-            <Input prefix={<UserOutlined />} placeholder="用户名" autoComplete="username" />
-          </Form.Item>
-          <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
-            <Input.Password prefix={<LockOutlined />} placeholder="密码" autoComplete="current-password" />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading} block>
-              登录
-            </Button>
-          </Form.Item>
+    <div className="login-page">
+      <div className="login-hero">
+        <div className="login-emblem"><SafetyCertificateOutlined /></div>
+        <Text className="login-kicker">国家科技重大专项</Text>
+        <Title className="login-title">重点项目科研管理系统</Title>
+        <Paragraph className="login-copy">围绕课题指标、成果预审、进度报告与归档材料，建立全过程协同管理闭环。</Paragraph>
+        <div className="login-metric-row"><div><b>1</b><span>固定重点项目</span></div><div><b>5</b><span>示范课题</span></div><div><b>4</b><span>业务角色</span></div></div>
+      </div>
+      <Card className="login-card" bordered={false}>
+        <Title level={3}>欢迎登录</Title>
+        <Paragraph type="secondary">当前为前端 Mock 原型，选择演示身份快速体验。</Paragraph>
+        <Alert message="账号权限与课题数据范围均在前端模拟，文件仅保存元数据。" type="info" showIcon style={{ marginBottom: 20 }} />
+        <Form form={form} layout="vertical" size="large" onFinish={submit}>
+          <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input prefix={<UserOutlined />} placeholder="请输入演示账号" /></Form.Item>
+          <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]}><Input.Password prefix={<LockOutlined />} placeholder="请输入密码" /></Form.Item>
+          <Button type="primary" htmlType="submit" loading={loading} block>进入系统</Button>
         </Form>
-
-        <div style={{ textAlign: 'center' }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            演示账号：admin / admin123
-          </Typography.Text>
+        <div className="demo-accounts">
+          <Text strong>演示账号</Text>
+          <Row gutter={[8, 8]} style={{ marginTop: 10 }}>
+            {demoAccounts.map((account) => <Col span={12} key={account.username}>
+              <button className="account-chip" onClick={() => form.setFieldsValue({ username: account.username, password: account.password })}>
+                <Tag color={account.color}>{account.role}</Tag><span>{account.username}</span>
+              </button>
+            </Col>)}
+          </Row>
         </div>
       </Card>
     </div>

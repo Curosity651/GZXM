@@ -1,71 +1,48 @@
-import { Card, Col, Row, Statistic, Typography } from 'antd';
+import { Alert, Card, Col, List, Progress, Row, Space, Statistic, Table, Tag, Typography } from 'antd';
+import { CheckCircleOutlined, ClockCircleOutlined, FileDoneOutlined, FolderOpenOutlined, RiseOutlined, WarningOutlined } from '@ant-design/icons';
 import { useAppStore } from '../store';
-import { generateWarnings } from '../utils/warnings';
-import { calculateDomesticJournalRatio } from '../utils/stats';
+import { buildTopicSummaries } from '../domain/monitoring';
+import { PageHeader } from '../components/common/PageHeader';
+import { StatusTag } from '../components/common/StatusTag';
 
-const { Title, Paragraph } = Typography;
+const { Text } = Typography;
 
 export function HomePage() {
-  const { project, topics, units, nodes, indicators, achievements, warningRules } = useAppStore();
+  const state = useAppStore();
+  const summaries = buildTopicSummaries(state.topics, state.indicators, state.achievements, state.currentUser ?? undefined);
+  const effective = state.achievements.filter((item) => item.status === '已生效' || item.status === '审批通过').length;
+  const reportDone = state.reports.filter((item) => item.status === '已通过').length;
+  const archiveDone = state.archiveSubmissions.filter((item) => item.status === '已通过').length;
+  const waiting = state.achievements.filter((item) => item.status.includes('初审中') || item.status.includes('终审中')).length + state.reports.filter((item) => ['初审中', '终审中'].includes(item.status)).length;
+  const roleHint: Record<string, string> = {
+    系统管理员: '你可以查看全部业务页面并维护账号与系统配置，业务审批按钮默认关闭。',
+    项目技术负责人: '重点关注待终审事项、课题横向进度和高风险预警。',
+    科研助理: '重点处理成果、报告和归档初审，并维护课题指标与项目公共材料。',
+    课题牵头单位: '请及时办理本课题成果、月季报、国家材料和配套自筹项目归档。',
+  };
+  const tasks = [
+    ...state.achievements.filter((item) => item.status.includes(state.currentUser?.role === '科研助理' ? '初审中' : '终审中')).slice(0, 3).map((item) => ({ title: item.title, status: item.status, type: '成果审批' })),
+    ...state.reports.filter((item) => item.status.includes(state.currentUser?.role === '科研助理' ? '初审中' : '终审中')).slice(0, 2).map((item) => ({ title: `${item.reportType === 'MONTHLY' ? '月报' : '季报'} · ${state.topics.find((topic) => topic.id === item.topicId)?.name}`, status: item.status, type: '进度报告' })),
+  ];
 
-  const unitMap = Object.fromEntries(units.map((u) => [u.id, u.name]));
-  const warnings = generateWarnings(indicators, achievements, nodes, topics, warningRules, unitMap);
-  const ratioData = calculateDomesticJournalRatio(achievements, topics);
-
-  const totalIndicators = indicators.length;
-  const totalAchievements = achievements.length;
-  const approvedAchievements = achievements.filter((a) => a.status === '审批通过').length;
-
-  return (
-    <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Title level={3}>{project.name}</Title>
-        <Paragraph>
-          项目编号：{project.code}｜起止时间：{project.startDate} 至 {project.endDate}
-        </Paragraph>
-        <Paragraph>
-          本系统用于对国家科技重大专项项目实施过程中形成的科研成果和项目材料进行统一管理。
-        </Paragraph>
-      </Card>
-
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic title="课题数量" value={topics.length} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="已配置指标" value={totalIndicators} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="已录入成果" value={totalAchievements} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="已审批成果" value={approvedAchievements} />
-          </Card>
-        </Col>
-      </Row>
-
-      <Row gutter={16}>
-        <Col span={12}>
-          <Card title="当前预警数">
-            <Statistic value={warnings.length} valueStyle={{ color: warnings.length > 0 ? '#cf1322' : '#3f8600' }} />
-          </Card>
-        </Col>
-        <Col span={12}>
-          <Card title="国内期刊论文情况">
-            <Statistic
-              value={ratioData.ratio !== null ? `${ratioData.chinese}/${ratioData.total}（${ratioData.ratio}%）` : '暂无数据'}
-              suffix={`要求 ≥ ${ratioData.minRequiredCount} 篇`}
-            />
-          </Card>
-        </Col>
-      </Row>
-    </div>
-  );
+  return <>
+    <PageHeader title="工作台" description={`${state.currentUser?.name}，欢迎回来。${roleHint[state.currentUser?.role ?? ''] ?? ''}`} />
+    <Alert type="info" showIcon message="本系统管理一个固定重点项目；科研指标、成果和月季报均按课题办理，配套自筹项目仅用于材料归档。" style={{ marginBottom: 20 }} />
+    <Row gutter={[16, 16]}>
+      {[{ title: '课题数量', value: summaries.length, icon: <RiseOutlined />, color: '#1677ff' }, { title: '生效成果', value: effective, icon: <FileDoneOutlined />, color: '#00a870' }, { title: '已通过报告', value: reportDone, icon: <CheckCircleOutlined />, color: '#7b61ff' }, { title: '已完成归档项', value: archiveDone, icon: <FolderOpenOutlined />, color: '#fa8c16' }, { title: '当前待审批', value: waiting, icon: <ClockCircleOutlined />, color: '#eb2f96' }].map((item) => <Col flex="1 1 190px" key={item.title}><Card className="metric-card"><Space align="start"><div className="metric-icon" style={{ color: item.color, background: `${item.color}15` }}>{item.icon}</div><Statistic title={item.title} value={item.value} /></Space></Card></Col>)}
+    </Row>
+    <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+      <Col xs={24} xl={16}><Card title="课题执行概览" extra={<Tag color="blue">仅终审通过计入</Tag>}>
+        <Table rowKey="topicId" size="middle" pagination={false} dataSource={summaries} columns={[
+          { title: '课题', dataIndex: 'topicName', render: (value, row) => <Space><Tag>{row.topicCode}</Tag><Text strong>{value}</Text></Space> },
+          { title: '指标目标', dataIndex: 'planned', width: 100 }, { title: '已完成', dataIndex: 'completed', width: 90 },
+          { title: '缺口', dataIndex: 'gap', width: 80, render: (value) => <Text type={value > 0 ? 'danger' : 'success'}>{value}</Text> },
+          { title: '完成率', dataIndex: 'rate', width: 220, render: (value) => <Progress percent={value} size="small" status={value < 50 ? 'exception' : 'active'} /> },
+        ]} />
+      </Card></Col>
+      <Col xs={24} xl={8}><Card title="我的待办" extra={<WarningOutlined style={{ color: '#fa8c16' }} />}>
+        {tasks.length ? <List dataSource={tasks} renderItem={(item) => <List.Item><List.Item.Meta title={item.title} description={item.type} /><StatusTag status={item.status} /></List.Item>} /> : <div className="empty-compact"><CheckCircleOutlined /><p>当前没有待办事项</p></div>}
+      </Card></Col>
+    </Row>
+  </>;
 }

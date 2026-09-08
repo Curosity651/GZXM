@@ -1,143 +1,104 @@
-import { Layout, Menu, Typography, Button, Space, Dropdown } from 'antd';
+import type { ReactNode } from 'react';
+import { Avatar, Button, Dropdown, Layout, Menu, Modal, Space, Tag, Typography, message } from 'antd';
+import type { MenuProps } from 'antd';
 import {
-  BarChartOutlined,
-  BellOutlined,
-  BookOutlined,
-  DashboardOutlined,
-  FileTextOutlined,
-  FormOutlined,
-  HomeOutlined,
-  InboxOutlined,
-  LogoutOutlined,
-  SearchOutlined,
-  TableOutlined,
-  UploadOutlined,
-  UserOutlined,
-  TeamOutlined,
+  BellOutlined, DashboardOutlined, FileDoneOutlined,
+  HomeOutlined, InboxOutlined, LogoutOutlined, SafetyCertificateOutlined,
+  SettingOutlined, TeamOutlined, UserOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { RedoOutlined } from '@ant-design/icons';
-import { useAppStore, canAccess } from '../../store';
-import type { UserRole } from '../../types';
+import { useAppStore } from '../../store';
+import { canViewPage, type PageKey } from '../../domain/permissions';
 
 const { Sider, Content, Header } = Layout;
-const { Title } = Typography;
+const { Text } = Typography;
 
-interface MenuItem {
+interface MenuNode {
   key: string;
-  icon: React.ReactNode;
-  label: React.ReactNode;
-  children?: MenuItem[];
+  label: ReactNode;
+  icon?: ReactNode;
+  page?: PageKey;
+  children?: MenuNode[];
+}
+
+const menuTree: MenuNode[] = [
+  { key: '/', label: <Link to="/">工作台</Link>, icon: <HomeOutlined />, page: 'home' },
+  {
+    key: 'indicator-group', label: '科研指标管理', icon: <DashboardOutlined />, children: [
+      { key: '/indicator', label: <Link to="/indicator">课题与指标配置</Link>, page: 'topic-indicator' },
+      { key: '/monitoring', label: <Link to="/monitoring">指标完成监控</Link>, page: 'indicator-monitoring' },
+      { key: '/warning-rules', label: <Link to="/warning-rules">预警规则配置</Link>, page: 'warning-rules' },
+    ],
+  },
+  {
+    key: 'achievement-group', label: '成果管理', icon: <FileDoneOutlined />, children: [
+      { key: '/achievement-entry', label: <Link to="/achievement-entry">成果填报</Link>, page: 'achievement-entry' },
+      { key: '/achievement-approval', label: <Link to="/achievement-approval">成果审批</Link>, page: 'achievement-review' },
+    ],
+  },
+  {
+    key: 'archive-group', label: '归档材料', icon: <InboxOutlined />, children: [
+      { key: '/archive/catalog', label: <Link to="/archive/catalog">归档目录</Link>, page: 'project-public-archive' },
+      { key: '/archive/upload', label: <Link to="/archive/upload">材料办理</Link>, page: 'topic-archive' },
+      { key: '/archive/query', label: <Link to="/archive/query">材料查询</Link>, page: 'topic-archive' },
+      { key: '/archive/monitoring', label: <Link to="/archive/monitoring">归档进度监控</Link>, page: 'archive-monitoring' },
+    ],
+  },
+  {
+    key: 'admin-group', label: '系统管理', icon: <SettingOutlined />, children: [
+      { key: '/admin/users', label: <Link to="/admin/users">用户管理</Link>, page: 'user-management' },
+    ],
+  },
+];
+
+function visibleMenu(nodes: MenuNode[], role: NonNullable<ReturnType<typeof useAppStore.getState>['currentUser']>['role']): MenuNode[] {
+  const result: MenuNode[] = [];
+  nodes.forEach((node) => {
+    const children = node.children ? visibleMenu(node.children, role) : undefined;
+    if (children && children.length > 0) result.push({ ...node, children });
+    else if (node.page && canViewPage(role, node.page)) result.push({ ...node });
+  });
+  return result;
 }
 
 export function AppLayout() {
-  const { currentUser, resetToMock, logout } = useAppStore();
+  const { currentUser, project, resetToMock, logout } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
+  if (!currentUser) return null;
 
-  const role: UserRole = currentUser?.role || '课题用户';
-
-  const allMenuItems: MenuItem[] = [
-    {
-      key: '/',
-      icon: <HomeOutlined />,
-      label: <Link to="/">首页</Link>,
-    },
-    {
-      key: 'research',
-      icon: <DashboardOutlined />,
-      label: '科研成果管理',
-      children: [
-        { key: '/indicator', icon: <TableOutlined />, label: <Link to="/indicator">科研指标配置</Link> },
-        { key: '/warning-rules', icon: <BellOutlined />, label: <Link to="/warning-rules">预警规则配置</Link> },
-        { key: '/achievement-entry', icon: <FormOutlined />, label: <Link to="/achievement-entry">成果录入</Link> },
-        { key: '/achievement-approval', icon: <FileTextOutlined />, label: <Link to="/achievement-approval">成果审批</Link> },
-        { key: '/monitoring', icon: <BarChartOutlined />, label: <Link to="/monitoring">指标监控</Link> },
-      ],
-    },
-    {
-      key: 'archive',
-      icon: <InboxOutlined />,
-      label: '项目材料归档',
-      children: [
-        { key: '/archive/catalog', icon: <BookOutlined />, label: <Link to="/archive/catalog">归档目录</Link> },
-        { key: '/archive/upload', icon: <UploadOutlined />, label: <Link to="/archive/upload">材料上传</Link> },
-        { key: '/archive/query', icon: <SearchOutlined />, label: <Link to="/archive/query">材料查询</Link> },
-        { key: '/archive/monitoring', icon: <BarChartOutlined />, label: <Link to="/archive/monitoring">归档监控</Link> },
-      ],
-    },
-    {
-      key: 'admin',
-      icon: <TeamOutlined />,
-      label: '系统管理',
-      children: [
-        { key: '/admin/users', icon: <UserOutlined />, label: <Link to="/admin/users">用户管理</Link> },
-      ],
-    },
-  ];
-
-  // Filter menus by role
-  const filterMenu = (items: MenuItem[]): MenuItem[] => {
-    return items
-      .filter((item) => {
-        if (item.key === '/') return true;
-        if (item.key === 'admin') return role === '系统管理员';
-        if (item.key === 'research') return canAccess(role, 'research');
-        if (item.key === 'archive') return canAccess(role, 'archive');
-        return true;
-      })
-      .map((item) => {
-        if (item.children) {
-          return { ...item, children: filterMenu(item.children) };
-        }
-        return item;
-      });
-  };
-
-  const menuItems = filterMenu(allMenuItems);
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
-
-  const userMenuItems = [
-    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout },
-  ];
+  const confirmReset = () => Modal.confirm({
+    title: '重置全部演示数据？',
+    content: '当前浏览器中的填报、审批和配置修改将恢复为初始 Mock 数据。',
+    okText: '确认重置', cancelText: '取消', okButtonProps: { danger: true },
+    onOk: () => { resetToMock(); message.success('演示数据已重置'); navigate('/'); },
+  });
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
-        <div style={{ padding: 16, borderBottom: '1px solid #f0f0f0' }}>
-          <Title level={5} style={{ margin: 0 }}>国家科技重大专项</Title>
+    <Layout className="app-shell">
+      <Sider width={244} theme="dark" className="app-sider">
+        <div className="brand-block">
+          <div className="brand-mark"><SafetyCertificateOutlined /></div>
+          <div><div className="brand-title">GZXM 科研管理</div><div className="brand-subtitle">重点项目协同工作台</div></div>
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          defaultOpenKeys={['research', 'archive', 'admin']}
-          items={menuItems as any}
-          style={{ borderRight: 0 }}
-        />
+        <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['indicator-group', 'achievement-group', 'archive-group']} items={visibleMenu(menuTree, currentUser.role) as MenuProps['items']} />
+        <div className="sider-foot"><BellOutlined /> Mock 原型 · 数据仅存本机</div>
       </Sider>
       <Layout>
-        <Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Title level={4} style={{ margin: 0 }}>科研成果管理</Title>
-          <Space>
-            {currentUser && (
-              <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                <Button icon={<UserOutlined />} type="text">
-                  {currentUser.name}（{currentUser.role}）
-                </Button>
-              </Dropdown>
-            )}
-            <Button icon={<RedoOutlined />} onClick={resetToMock}>
-              重置演示数据
-            </Button>
+        <Header className="app-header">
+          <div><Text strong>{project.name}</Text><Tag color="blue" style={{ marginLeft: 10 }}>{project.code}</Tag></div>
+          <Space size={12}>
+            <Button type="text" onClick={confirmReset}>重置演示数据</Button>
+            <Dropdown menu={{ items: [
+              { key: 'role', icon: <TeamOutlined />, label: currentUser.role, disabled: true },
+              { type: 'divider' },
+              { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: () => { logout(); navigate('/login', { replace: true }); } },
+            ] }}>
+              <Button type="text"><Space><Avatar size="small" icon={<UserOutlined />} />{currentUser.name}</Space></Button>
+            </Dropdown>
           </Space>
         </Header>
-        <Content style={{ padding: 24, background: '#f5f5f5' }}>
-          <Outlet />
-        </Content>
+        <Content className="app-content"><Outlet /></Content>
       </Layout>
     </Layout>
   );

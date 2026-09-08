@@ -1,86 +1,21 @@
-import { Card, InputNumber, Space, Switch, Table, Typography } from 'antd';
+import { Card, InputNumber, Switch, Table, Tag, Typography } from 'antd';
 import { useAppStore } from '../../store';
-import { WARNING_TYPES } from '../../types';
-import { levelColor, levelLabel } from '../../utils/helpers';
+import { canPerform } from '../../domain/permissions';
+import { PageHeader } from '../../components/common/PageHeader';
 
 const { Text } = Typography;
 
 export function WarningRulePage() {
-  const { warningRules, updateWarningRule } = useAppStore();
-
-  const columns = [
-    {
-      title: '预警类型',
-      dataIndex: 'name',
-      key: 'name',
-      width: 200,
-      render: (_: string, record: any) => {
-        const wt = WARNING_TYPES.find((w) => w.value === record.type);
-        return wt?.label || record.name;
-      },
-    },
-    {
-      title: '启用',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      width: 100,
-      render: (enabled: boolean, record: any) => (
-        <Switch
-          checked={enabled}
-          onChange={(v) => updateWarningRule(record.id, { enabled: v })}
-        />
-      ),
-    },
-    {
-      title: '三级阈值配置',
-      key: 'levels',
-      render: (_: any, record: any) => (
-        <Space direction="vertical" style={{ width: '100%' }}>
-          {record.levels.map((level: any) => (
-            <Space key={level.level} style={{ width: '100%' }}>
-              <Text style={{ color: levelColor(level.level), width: 70 }}>
-                {levelLabel(level.level)}
-              </Text>
-              <Text>提前天数：</Text>
-              <InputNumber
-                min={0}
-                value={level.advanceDays}
-                onChange={(v) => {
-                  const levels = record.levels.map((l: any) =>
-                    l.level === level.level ? { ...l, advanceDays: v } : l
-                  );
-                  updateWarningRule(record.id, { levels });
-                }}
-              />
-              <Text>完成率阈值（%）：</Text>
-              <InputNumber
-                min={0}
-                max={100}
-                value={level.completionRateThreshold}
-                onChange={(v) => {
-                  const levels = record.levels.map((l: any) =>
-                    l.level === level.level
-                      ? { ...l, completionRateThreshold: v }
-                      : l
-                  );
-                  updateWarningRule(record.id, { levels });
-                }}
-              />
-            </Space>
-          ))}
-        </Space>
-      ),
-    },
-  ];
-
-  return (
-    <Card title="预警规则配置">
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={warningRules}
-        pagination={false}
-      />
-    </Card>
-  );
+  const state = useAppStore();
+  const editable = canPerform(state.currentUser!.role, 'warning.manage');
+  return <>
+    <PageHeader title="预警规则配置" description="科研助理维护黄、橙、红三级阈值；其他角色仅查看。" />
+    <Card><Table rowKey="id" pagination={false} dataSource={state.warningRules} columns={[
+      { title: '规则名称', dataIndex: 'name', render: (value) => <Text strong>{value}</Text> },
+      { title: '状态', dataIndex: 'enabled', width: 100, render: (value, row) => <Switch checked={value} disabled={!editable} onChange={(checked) => state.updateWarningRule(row.id, { enabled: checked })} /> },
+      { title: '黄色阈值', render: (_, row) => <Tag color="gold">提前 {row.levels.find((item) => item.level === 'yellow')?.advanceDays ?? 0} 天</Tag> },
+      { title: '橙色阈值', render: (_, row) => <Tag color="orange">提前 {row.levels.find((item) => item.level === 'orange')?.advanceDays ?? 0} 天</Tag> },
+      { title: '红色阈值', render: (_, row) => <InputNumber value={row.levels.find((item) => item.level === 'red')?.advanceDays ?? 0} disabled={!editable} addonAfter="天" /> },
+    ]} /></Card>
+  </>;
 }
