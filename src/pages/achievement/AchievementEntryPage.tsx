@@ -47,7 +47,10 @@ export function AchievementEntryPage() {
   const save = async () => {
     const values = await form.validateFields(); const at = new Date().toISOString();
     if (editing) state.updateAchievement(editing.id, { ...values, uploadUnitId: editing.uploadUnitId ?? editing.unitId });
-    else state.addAchievement({ id: `achievement-${Date.now()}`, projectId: state.project.id, topicId, unitId: user.unitId!, uploadUnitId: user.unitId!, topicUnitMembershipId: ownMembership!.id, unitIndicatorAllocationId: values.unitIndicatorAllocationId, indicatorDefinitionId: definitionId, achievementType, indicatorId: values.indicatorId!, nodeId: values.nodeId!, title: values.title!, responsiblePerson: values.responsiblePerson!, progressStatus: values.progressStatus ?? '拟投稿/申请', plannedCompletionDate: values.plannedCompletionDate, status: initialAchievementStatus(achievementType), countsToIndicator: false, createdAt: at, updatedAt: at, remarks: values.remarks ?? '', materials: [], recordVersion: 1, history: [], ...values });
+    else {
+      const allocation = scopedAllocations.find((item) => item.unitId === user.unitId && item.targetQuantity > 0)!;
+      state.addAchievement({ id: `achievement-${Date.now()}`, projectId: state.project.id, topicId, unitId: user.unitId!, uploadUnitId: user.unitId!, topicUnitMembershipId: ownMembership!.id, unitIndicatorAllocationId: allocation.id, indicatorDefinitionId: definitionId, achievementType, indicatorId: allocation.id, nodeId: allocation.nodeId, title: values.title!, responsiblePerson: values.responsiblePerson!, progressStatus: values.progressStatus ?? '拟投稿/申请', plannedCompletionDate: values.plannedCompletionDate, status: initialAchievementStatus(achievementType), countsToIndicator: false, createdAt: at, updatedAt: at, remarks: values.remarks ?? '', materials: [], recordVersion: 1, history: [], ...values });
+    }
     message.success('成果草稿已保存'); setOpen(false);
   };
   const submit = (item: Achievement) => {
