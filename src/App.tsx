@@ -21,6 +21,7 @@ import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { RolePermissionPage } from './pages/admin/RolePermissionPage';
 import { ReportManagementPage } from './pages/report/ReportManagementPage';
 import { ReportApprovalPage } from './pages/report/ReportApprovalPage';
+import { ReportProgressPage } from './pages/report/ReportProgressPage';
 
 function App() {
   return (
@@ -40,7 +41,7 @@ function App() {
             <Route path="achievement-approval" element={<AchievementApprovalPage />} />
             <Route path="achievement-query" element={<AchievementQueryPage />} />
             <Route path="monitoring" element={<IndicatorMonitoringPage />} />
-            <Route path="progress-overview" element={<IndicatorMonitoringPage />} />
+            <Route path="progress-overview" element={<ReportProgressPage />} />
             <Route path="reports" element={<ReportManagementPage />} />
             <Route path="report-approval" element={<ReportApprovalPage />} />
             <Route path="archive/catalog" element={<ArchiveCatalogPage />} />

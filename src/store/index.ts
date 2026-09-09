@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 import type { StateCreator } from 'zustand';
 import type {
   Achievement, ApprovalRecord, ArchiveCategory, ArchiveMaterial, ArchiveRequirement, ArchiveSubmission,
-  IndicatorConfig, ProgressReport, Project, ProjectUnit, ReportTask, SelfFundedProject, TimeNode, Topic,
+  IndicatorConfig, ProgressReport, Project, ProjectUnit, ReportTask, ReportSubmissionRule, SelfFundedProject, TimeNode, Topic,
   TopicPowerGridRequirement, User, UserRole, WarningRule, RbacRole, IndicatorDefinition,
   TopicIndicator, TopicUnitMembership, UnitIndicatorAllocation,
 } from '../types';
@@ -14,11 +14,14 @@ import {
   MOCK_REPORT_TASKS, MOCK_SELF_FUNDED_PROJECTS, MOCK_TIME_NODES, MOCK_TOPICS,
   MOCK_TOPIC_POWER_GRID_REQUIREMENTS, MOCK_UNITS, MOCK_USERS, MOCK_WARNING_RULES, MOCK_WORKFLOW_ACHIEVEMENTS, MOCK_ROLES,
   MOCK_INDICATOR_DEFINITIONS, MOCK_TOPIC_INDICATORS, MOCK_TOPIC_MEMBERSHIPS, MOCK_UNIT_INDICATOR_ALLOCATIONS,
+  MOCK_REPORT_RULES,
 } from '../data/mock';
 import { nextAchievementStatus, type AchievementAction } from '../domain/workflows';
 import { nextReportStatus, type ReportAction } from '../domain/report-flow';
 import { nextArchiveStatus, type ArchiveAction } from '../domain/archive-flow';
 import { canAccessTopic, canPerform, filterByTopicScope, getRole } from '../domain/permissions';
+import { generateReportTasks } from '../domain/reporting';
+import { isTopicLead } from '../domain/topic-access';
 
 export interface AppData {
   project: Project;
@@ -34,6 +37,7 @@ export interface AppData {
   achievements: Achievement[];
   approvalRecords: ApprovalRecord[];
   reportTasks: ReportTask[];
+  reportRules: ReportSubmissionRule[];
   reports: ProgressReport[];
   selfFundedProjects: SelfFundedProject[];
   archiveCategories: ArchiveCategory[];
@@ -79,6 +83,7 @@ export interface AppState extends AppData {
   advanceAchievement: (id: string, action: AchievementAction, operatorId: string) => void;
   reviewAchievement: (id: string, action: AchievementAction, operatorId: string, opinion: string) => void;
   saveReport: (report: ProgressReport) => void;
+  saveReportRule: (rule: ReportSubmissionRule) => void;
   submitReport: (id: string, operatorId: string) => void;
   reviewReport: (id: string, action: ReportAction, operatorId: string, opinion: string) => void;
   addSelfFundedProject: (project: SelfFundedProject, operatorId: string) => void;
@@ -137,6 +142,7 @@ export function createInitialState(): AppData {
     achievements: normalizedAchievements,
     approvalRecords: MOCK_APPROVAL_RECORDS,
     reportTasks: MOCK_REPORT_TASKS,
+    reportRules: MOCK_REPORT_RULES,
     reports: MOCK_REPORTS,
     selfFundedProjects: MOCK_SELF_FUNDED_PROJECTS,
     archiveCategories: MOCK_ARCHIVE_CATEGORIES,
@@ -259,11 +265,15 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
       ? state.reports.map((item) => item.id === report.id ? report : item)
       : [...state.reports, report],
   })),
+  saveReportRule: (rule) => set((state) => {
+    const reportRules = state.reportRules.some((item) => item.id === rule.id) ? state.reportRules.map((item) => item.id === rule.id ? rule : item) : [...state.reportRules, rule];
+    return { reportRules, reportTasks: generateReportTasks(state.topics, reportRules, state.reportTasks, state.reports) };
+  }),
   submitReport: (id, operatorId) => {
     const report = get().reports.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
     if (!report || !operator) throw new Error('报告或操作人不存在');
-    if (!canPerform(operator, get().roles, 'report.submit') || !canAccessTopic(operator, report.topicId)) throw new Error('没有该课题报告的提交权限');
+    if (!canPerform(operator, get().roles, 'report.submit') || !canAccessTopic(operator, report.topicId) || !isTopicLead(operator, report.topicId, get().topicMemberships)) throw new Error('只有课题牵头单位可以提交该课题月季报');
     const status = nextReportStatus(report.status, 'SUBMIT');
     set((state) => ({ reports: state.reports.map((item) => item.id === id ? { ...item, status, submittedAt: today(), updatedAt: today() } : item) }));
   },
@@ -372,7 +382,7 @@ export function createAppStore() {
 }
 
 export const useAppStore = create<AppState>()(
-  persist(stateCreator, { name: 'gzxm-research-management-v3', version: 3 }),
+  persist(stateCreator, { name: 'gzxm-research-management-v4', version: 4 }),
 );
 
 export const canEditAchievement = (status: string): boolean => ['草稿', '退回修改', '预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(status);

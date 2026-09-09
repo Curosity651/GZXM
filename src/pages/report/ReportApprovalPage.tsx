@@ -30,7 +30,10 @@ export function ReportApprovalPage() {
     {!canInitial && !canFinal && <Alert showIcon type="info" message="当前角色可查看审批记录，但没有审批操作权限。" style={{ marginBottom: 16 }} />}
     <Card><Table rowKey="id" dataSource={reviewable} columns={[
       { title: '报告', render: (_, row) => <Space><Tag color={row.reportType === 'MONTHLY' ? 'blue' : 'purple'}>{row.reportType === 'MONTHLY' ? '月报' : '季报'}</Tag>{state.topics.find((item) => item.id === row.topicId)?.name}</Space> },
+      { title: '报告期次', width: 150, render: (_, row) => { const task = state.reportTasks.find((item) => item.id === row.taskId); return task ? task.reportType === 'MONTHLY' ? `${task.year} 年 ${task.period} 月` : `${task.year} 年第 ${task.period} 季度` : '—'; } },
+      { title: '牵头单位', width: 180, render: (_, row) => { const topic = state.topics.find((item) => item.id === row.topicId); return state.units.find((item) => item.id === topic?.leadingUnitId)?.name ?? '—'; } },
       { title: '状态', dataIndex: 'status', width: 120, render: (value) => <StatusTag status={value} /> },
+      { title: '审批层级', width: 120, render: (_, row) => row.status === '初审中' ? '科研助理初审' : '技术负责人终审' },
       { title: '提交时间', dataIndex: 'submittedAt', width: 130 }, { title: '逾期', dataIndex: 'overdue', width: 80, render: (value) => value ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag> },
       { title: '操作', width: 110, render: (_, row) => <Button type="link" icon={<EyeOutlined />} onClick={() => setDetail(row)}>查看审批</Button> },
     ]} /></Card>

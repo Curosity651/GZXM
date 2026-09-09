@@ -13,7 +13,7 @@ export const PAGE_PERMISSION_OPTIONS: { value: PageKey; label: string; group: st
   { value: 'achievement-query', label: '成果查询', group: '成果管理' },
   { value: 'report-management', label: '月季报填报', group: '进度管理' },
   { value: 'report-review', label: '月季报审批', group: '进度管理' },
-  { value: 'progress-overview', label: '课题进度总览', group: '进度管理' },
+  { value: 'progress-overview', label: '月季报进度', group: '进度管理' },
   { value: 'project-public-archive', label: '项目公共材料', group: '归档管理' },
   { value: 'topic-archive', label: '课题国家材料', group: '归档管理' },
   { value: 'self-funded-archive', label: '配套自筹项目材料', group: '归档管理' },
@@ -40,6 +40,7 @@ export const ACTION_PERMISSION_OPTIONS: { value: ActionKey; label: string; group
   { value: 'report.submit', label: '提交月季报', group: '进度管理' },
   { value: 'report.initial.approve', label: '月季报初审', group: '进度管理' },
   { value: 'report.final.approve', label: '月季报终审', group: '进度管理' },
+  { value: 'report.rule.manage', label: '配置月季报规则', group: '进度管理' },
   { value: 'archive.public.submit', label: '提交项目公共材料', group: '归档管理' },
   { value: 'archive.topic.submit', label: '提交课题归档材料', group: '归档管理' },
   { value: 'archive.initial.approve', label: '归档材料初审', group: '归档管理' },
@@ -67,10 +68,7 @@ const pagePermissions: Record<UserRole, PageKey[] | 'ALL'> = {
     'home', 'topic-indicator', 'indicator-monitoring', 'achievement-entry', 'achievement-query',
     'report-management', 'progress-overview', 'topic-archive', 'self-funded-archive', 'archive-monitoring',
   ],
-  课题承担单位: [
-    'home', 'indicator-monitoring', 'achievement-entry', 'achievement-query',
-    'report-management', 'progress-overview', 'topic-archive', 'archive-monitoring',
-  ],
+  课题承担单位: ['home', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'topic-archive', 'archive-monitoring'],
 };
 
 const actionPermissions: Record<ActionKey, UserRole[]> = {
@@ -88,6 +86,7 @@ const actionPermissions: Record<ActionKey, UserRole[]> = {
   'report.submit': ['课题牵头单位', '课题承担单位'],
   'report.initial.approve': ['科研助理'],
   'report.final.approve': ['项目技术负责人'],
+  'report.rule.manage': ['科研助理'],
   'archive.public.submit': ['科研助理'],
   'archive.topic.submit': ['课题牵头单位', '课题承担单位'],
   'archive.initial.approve': ['科研助理'],

@@ -296,7 +296,7 @@ export type ActionPermissionKey =
   | 'topic.manage' | 'indicator.manage' | 'indicator.catalog.manage' | 'topic-indicator.publish'
   | 'topic-unit.manage' | 'unit-allocation.manage' | 'unit-allocation.publish' | 'warning.manage'
   | 'achievement.submit' | 'achievement.initial.approve' | 'achievement.final.approve'
-  | 'report.submit' | 'report.initial.approve' | 'report.final.approve'
+  | 'report.submit' | 'report.initial.approve' | 'report.final.approve' | 'report.rule.manage'
   | 'archive.public.submit' | 'archive.topic.submit' | 'archive.initial.approve' | 'archive.final.approve'
   | 'self-funded.manage' | 'system.manage';
 
@@ -341,13 +341,27 @@ export interface ApprovalRecord {
 export type ReportType = 'MONTHLY' | 'QUARTERLY';
 export type ReportStatus = '未填报' | '草稿' | '初审中' | '终审中' | '已通过' | '退回修改';
 
+export interface ReportSubmissionRule {
+  id: string;
+  reportType: ReportType;
+  enabled: boolean;
+  effectiveYear: number;
+  openDay: number;
+  deadlineDay: number;
+  quarterlyMonths: number[];
+  updatedAt: string;
+  updatedBy?: string;
+}
+
 export interface ReportTask {
   id: string;
   topicId: string;
   reportType: ReportType;
   year: number;
   period: number;
+  openDate: string;
   deadline: string;
+  ruleId: string;
 }
 
 export interface ProgressReport {

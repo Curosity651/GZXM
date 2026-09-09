@@ -40,9 +40,9 @@ const menuTree: MenuNode[] = [
   },
   {
     key: 'report-group', label: '进度管理', icon: <FileTextOutlined />, children: [
-      { key: '/reports', label: <Link to="/reports">月报与季报</Link>, page: 'report-management' },
+      { key: '/reports', label: <Link to="/reports">月季报提交</Link>, page: 'report-management' },
       { key: '/report-approval', label: <Link to="/report-approval">月季报审批</Link>, page: 'report-review' },
-      { key: '/progress-overview', label: <Link to="/progress-overview">项目进度总览</Link>, page: 'progress-overview' },
+      { key: '/progress-overview', label: <Link to="/progress-overview">月季报进度</Link>, page: 'progress-overview' },
     ],
   },
   {

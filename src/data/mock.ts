@@ -1,10 +1,11 @@
 import type {
   Achievement, AchievementMaterial, ArchiveCategory, ArchiveMaterial, ArchiveRequirement,
   IndicatorConfig, Project, ProjectUnit, ApprovalRecord, ReportTask, ProgressReport,
-  SelfFundedProject, ArchiveSubmission, TimeNode, Topic, WarningRule, User, RbacRole,
+  SelfFundedProject, ArchiveSubmission, TimeNode, Topic, WarningRule, User, RbacRole, ReportSubmissionRule,
   IndicatorDefinition, TopicIndicator, TopicUnitMembership, UnitIndicatorAllocation,
 } from '../types';
 import { ALL_PAGE_PERMISSIONS } from '../domain/permissions';
+import { generateReportTasks } from '../domain/reporting';
 
 export const MOCK_PROJECT: Project = { id: 'p1', name: '国家科技重大专项示范', code: 'GZ-2025-001', startDate: '2025-01-01', endDate: '2028-12-31' };
 
@@ -242,9 +243,9 @@ export const MOCK_UNIT_INDICATOR_ALLOCATIONS: UnitIndicatorAllocation[] = MOCK_T
 export const MOCK_ROLES: RbacRole[] = [
   { id: 'role-system-admin', code: 'system-admin', name: '系统管理员', description: '查看全部页面，负责账号、权限、字典和系统配置，默认不参与业务审批', pagePermissions: ALL_PAGE_PERMISSIONS, actionPermissions: ['system.manage'], enabled: true, builtIn: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
   { id: 'role-project-leader', code: 'project-leader', name: '项目技术负责人', description: '业务终审与全局进度查看', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'achievement-entry', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['achievement.final.approve', 'report.final.approve', 'archive.final.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  { id: 'role-research-assistant', code: 'research-assistant', name: '科研助理', description: '指标配置、业务初审与项目公共材料归档', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'warning-rules', 'achievement-entry', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['topic.manage', 'indicator.manage', 'indicator.catalog.manage', 'topic-indicator.publish', 'warning.manage', 'achievement.initial.approve', 'report.initial.approve', 'archive.public.submit', 'archive.initial.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-research-assistant', code: 'research-assistant', name: '科研助理', description: '指标配置、业务初审与项目公共材料归档', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'warning-rules', 'achievement-entry', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['topic.manage', 'indicator.manage', 'indicator.catalog.manage', 'topic-indicator.publish', 'warning.manage', 'achievement.initial.approve', 'report.initial.approve', 'report.rule.manage', 'archive.public.submit', 'archive.initial.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
   { id: 'role-topic-unit', code: 'topic-unit', name: '课题牵头单位', description: '课题成员与单位指标管理、成果及材料填报', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'report-management', 'progress-overview', 'topic-archive', 'self-funded-archive', 'archive-monitoring'], actionPermissions: ['topic-unit.manage', 'unit-allocation.manage', 'unit-allocation.publish', 'achievement.submit', 'report.submit', 'archive.topic.submit', 'self-funded.manage'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  { id: 'role-topic-participant', code: 'topic-participant', name: '课题承担单位', description: '承担单位成果、月季报与课题材料填报', pagePermissions: ['home', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'report-management', 'progress-overview', 'topic-archive', 'archive-monitoring'], actionPermissions: ['achievement.submit', 'report.submit', 'archive.topic.submit'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-topic-participant', code: 'topic-participant', name: '课题承担单位', description: '承担单位成果与课题材料填报', pagePermissions: ['home', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'topic-archive', 'archive-monitoring'], actionPermissions: ['achievement.submit', 'archive.topic.submit'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
 ];
 
 export const MOCK_USERS: User[] = [
@@ -301,14 +302,16 @@ export const MOCK_ARCHIVE_MATERIALS: ArchiveMaterial[] = [
 
 export const MOCK_APPROVAL_RECORDS: ApprovalRecord[] = [];
 
-export const MOCK_REPORT_TASKS: ReportTask[] = MOCK_TOPICS.flatMap((topic) => ([
-  { id: `report-task-m-${topic.id}`, topicId: topic.id, reportType: 'MONTHLY', year: 2026, period: 9, deadline: '2026-09-30' },
-  { id: `report-task-q-${topic.id}`, topicId: topic.id, reportType: 'QUARTERLY', year: 2026, period: 3, deadline: '2026-09-10' },
-]));
+export const MOCK_REPORT_RULES: ReportSubmissionRule[] = [
+  { id: 'report-rule-monthly', reportType: 'MONTHLY', enabled: true, effectiveYear: 2026, openDay: 20, deadlineDay: 30, quarterlyMonths: [], updatedAt: '2026-01-01', updatedBy: '科研助理（董）' },
+  { id: 'report-rule-quarterly', reportType: 'QUARTERLY', enabled: true, effectiveYear: 2026, openDay: 1, deadlineDay: 10, quarterlyMonths: [3, 6, 9, 12], updatedAt: '2026-01-01', updatedBy: '科研助理（董）' },
+];
+
+export const MOCK_REPORT_TASKS: ReportTask[] = generateReportTasks(MOCK_TOPICS, MOCK_REPORT_RULES);
 
 export const MOCK_REPORTS: ProgressReport[] = [
   {
-    id: 'report-t1-sep', taskId: 'report-task-m-t1', topicId: 't1', reportType: 'MONTHLY',
+    id: 'report-t1-sep', taskId: 'report-task-m-t1-2026-9', topicId: 't1', reportType: 'MONTHLY',
     milestoneProgress: '完成总体架构评审，里程碑按计划推进。', overallProgress: '完成关键技术方案论证和原型验证。',
     demonstrationProgress: '完成示范场景调研。', fundUsage: '本期支出 18 万元，累计支出 126 万元。',
     nextPlan: '完成核心模块联调。', problemsAndMeasures: '跨单位数据口径不一致，计划组织专项协调。',
