@@ -18,7 +18,6 @@ import { TopicArchivePage } from './pages/archive/TopicArchivePage';
 import { SelfFundedProjectPage } from './pages/archive/SelfFundedProjectPage';
 import { ArchiveApprovalPage } from './pages/archive/ArchiveApprovalPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
-import { SystemConfigPage } from './pages/admin/SystemConfigPage';
 import { RolePermissionPage } from './pages/admin/RolePermissionPage';
 import { ReportManagementPage } from './pages/report/ReportManagementPage';
 import { ReportApprovalPage } from './pages/report/ReportApprovalPage';
@@ -52,7 +51,6 @@ function App() {
             <Route path="archive/monitoring" element={<ArchiveMonitoringPage />} />
             <Route path="admin/users" element={<UserManagementPage />} />
             <Route path="admin/roles" element={<RolePermissionPage />} />
-            <Route path="admin/config" element={<SystemConfigPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
