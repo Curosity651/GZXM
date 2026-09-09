@@ -2,6 +2,7 @@ import type {
   Achievement, AchievementMaterial, ArchiveCategory, ArchiveMaterial, ArchiveRequirement,
   IndicatorConfig, Project, ProjectUnit, ApprovalRecord, ReportTask, ProgressReport,
   SelfFundedProject, ArchiveSubmission, TimeNode, Topic, WarningRule, User, RbacRole,
+  IndicatorDefinition, TopicIndicator, TopicUnitMembership, UnitIndicatorAllocation,
 } from '../types';
 import { ALL_ACTION_PERMISSIONS, ALL_PAGE_PERMISSIONS } from '../domain/permissions';
 
@@ -203,11 +204,47 @@ export const MOCK_WORKFLOW_ACHIEVEMENTS: Achievement[] = [
   },
 ];
 
+export const MOCK_INDICATOR_DEFINITIONS: IndicatorDefinition[] = [
+  ['paper', 'PAPER', '学术论文'], ['patent', 'PATENT', '发明专利'], ['copyright', 'COPYRIGHT', '软件著作权'],
+  ['standard', 'STANDARD', '标准规范'], ['talent', 'TALENT', '人才培养'],
+].map(([id, code, name]) => ({
+  id: `indicator-${id}`, code, name, achievementType: name as IndicatorDefinition['achievementType'],
+  unit: name === '人才培养' ? '人' : name === '学术论文' ? '篇' : '项', builtIn: true, enabled: true,
+  createdAt: '2025-01-01', updatedAt: '2025-01-01',
+}));
+
+export const MOCK_TOPIC_MEMBERSHIPS: TopicUnitMembership[] = MOCK_TOPICS.flatMap((topic) => [
+  { id: `membership-${topic.id}-${topic.leadingUnitId}`, topicId: topic.id, unitId: topic.leadingUnitId, membershipType: 'LEAD' as const, principalName: topic.principalName, contactName: topic.contactName, contactPhone: topic.contactPhone, contactEmail: topic.contactEmail, enabled: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  ...topic.participatingUnitIds.map((unitId) => ({ id: `membership-${topic.id}-${unitId}`, topicId: topic.id, unitId, membershipType: 'PARTICIPANT' as const, enabled: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' })),
+]);
+
+export const MOCK_TOPIC_INDICATORS: TopicIndicator[] = MOCK_TOPICS.flatMap((topic) =>
+  Object.entries(topic.topicOverallRequirements).filter(([, quantity]) => quantity > 0).map(([type, quantity]) => {
+    const definition = MOCK_INDICATOR_DEFINITIONS.find((item) => item.achievementType === type)!;
+    return { id: `topic-indicator-${topic.id}-${definition.id}-node-5`, projectId: 'p1', topicId: topic.id,
+      indicatorDefinitionId: definition.id, achievementType: definition.achievementType, nodeId: 'node-5', targetQuantity: quantity,
+      status: '已下发' as const, version: 1, publishedAt: '2025-01-01', publishedBy: '科研助理（董）', createdAt: '2025-01-01', updatedAt: '2025-01-01' };
+  }),
+);
+
+export const MOCK_UNIT_INDICATOR_ALLOCATIONS: UnitIndicatorAllocation[] = MOCK_TOPIC_INDICATORS.flatMap((topicIndicator) => {
+  const memberships = MOCK_TOPIC_MEMBERSHIPS.filter((item) => item.topicId === topicIndicator.topicId && item.enabled);
+  return memberships.map((membership, index) => ({
+    id: `allocation-${topicIndicator.id}-${membership.unitId}`, projectId: 'p1', topicId: topicIndicator.topicId,
+    membershipId: membership.id, unitId: membership.unitId, topicIndicatorId: topicIndicator.id,
+    indicatorDefinitionId: topicIndicator.indicatorDefinitionId, achievementType: topicIndicator.achievementType,
+    nodeId: topicIndicator.nodeId, targetQuantity: index === 0 ? topicIndicator.targetQuantity : 0,
+    status: '已下发' as const, version: 1, publishedAt: '2025-01-02', publishedBy: '课题牵头单位',
+    createdAt: '2025-01-02', updatedAt: '2025-01-02',
+  }));
+});
+
 export const MOCK_ROLES: RbacRole[] = [
   { id: 'role-system-admin', code: 'system-admin', name: '系统管理员', description: '账号、权限、字典和系统配置', pagePermissions: ALL_PAGE_PERMISSIONS, actionPermissions: ALL_ACTION_PERMISSIONS, enabled: true, builtIn: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
   { id: 'role-project-leader', code: 'project-leader', name: '项目技术负责人', description: '业务终审与全局进度查看', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['achievement.final.approve', 'report.final.approve', 'archive.final.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
   { id: 'role-research-assistant', code: 'research-assistant', name: '科研助理', description: '指标配置、业务初审与项目公共材料归档', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'warning-rules', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['topic.manage', 'indicator.manage', 'warning.manage', 'achievement.initial.approve', 'report.initial.approve', 'archive.public.submit', 'archive.initial.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
   { id: 'role-topic-unit', code: 'topic-unit', name: '课题牵头单位', description: '课题成果、月季报和归档材料填报', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'report-management', 'progress-overview', 'topic-archive', 'self-funded-archive', 'archive-monitoring'], actionPermissions: ['achievement.submit', 'report.submit', 'archive.topic.submit', 'self-funded.manage'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-topic-participant', code: 'topic-participant', name: '课题承担单位', description: '承担单位成果、月季报与课题材料填报', pagePermissions: ['home', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'report-management', 'progress-overview', 'topic-archive', 'archive-monitoring'], actionPermissions: ['achievement.submit', 'report.submit', 'archive.topic.submit'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
 ];
 
 export const MOCK_USERS: User[] = [
@@ -219,6 +256,7 @@ export const MOCK_USERS: User[] = [
   { id: 'user-topic-3', username: 'topic03', password: 'topic123', name: '课题三牵头单位', unitId: 'u-ict', topicId: 't3', topicIds: ['t3'], dataScope: 'TOPICS', phone: '13800000103', email: 'topic03@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
   { id: 'user-topic-4', username: 'topic04', password: 'topic123', name: '课题四牵头单位', unitId: 'u-sgcc', topicId: 't4', topicIds: ['t4'], dataScope: 'TOPICS', phone: '13800000104', email: 'topic04@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
   { id: 'user-topic-5', username: 'topic05', password: 'topic123', name: '课题五牵头单位', unitId: 'u-hust', topicId: 't5', topicIds: ['t5'], dataScope: 'TOPICS', phone: '13800000105', email: 'topic05@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-participant-pku', username: 'unit01', password: 'unit123', name: '北京大学承担单位账号', unitId: 'u-pku', topicIds: ['t1', 't5'], dataScope: 'TOPICS', phone: '13800000201', email: 'unit01@mock.local', role: '课题承担单位', roleId: 'role-topic-participant', enabled: true, createdAt: '2025-01-01' },
 ];
 
 export const MOCK_ARCHIVE_CATEGORIES: ArchiveCategory[] = [

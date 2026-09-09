@@ -14,6 +14,8 @@ export interface ProjectUnit {
 export interface Topic {
   id: string; projectId: string; code: string; name: string;
   leadingUnitId: string; participatingUnitIds: string[];
+  startDate?: string; endDate?: string; summary?: string;
+  status?: '草稿' | '实施中' | '已暂停' | '已结题';
   principalName?: string;
   contactName?: string; contactPhone?: string; contactEmail?: string;
   financeAssistant?: string; financeAssistantEmail?: string; financeAssistantPhone?: string;
@@ -37,7 +39,7 @@ export const PAPER_TYPES: PaperType[] = ['SCI', 'EI', '中文核心', 'CSCD', '�
 export type EducationLevel = '博士' | '硕士';
 
 export type AchievementWorkflowStatus =
-  | '预审草稿' | '预审初审中' | '预审终审中' | '预审退回' | '预审通过'
+  | '预审草稿' | '预审初审中' | '预审终审中' | '预审退回' | '预审通过' | '允许投稿/申请' | '已投稿/已申请'
   | '正式成果草稿' | '正式初审中' | '正式终审中' | '正式退回' | '已生效';
 export type AchievementStatus = AchievementWorkflowStatus | '草稿' | '已提交' | '审批中' | '审批通过' | '审批不通过' | '退回修改';
 export const ACHIEVEMENT_STATUS: AchievementStatus[] = ['草稿', '已提交', '审批中', '审批通过', '审批不通过', '退回修改'];
@@ -53,6 +55,34 @@ export interface IndicatorConfig {
   id: string; projectId: string; topicId: string; unitId: string;
   achievementType: AchievementType; nodeId: string; plannedQuantity: number;
   remarks?: string; createdAt: string; updatedAt: string;
+}
+
+// 新版两级指标模型：科研助理下发到课题，课题牵头单位再分配到单位。
+export type TopicUnitMembershipType = 'LEAD' | 'PARTICIPANT';
+export interface TopicUnitMembership {
+  id: string; topicId: string; unitId: string; membershipType: TopicUnitMembershipType;
+  principalName?: string; contactName?: string; contactPhone?: string; contactEmail?: string;
+  enabled: boolean; createdAt: string; updatedAt: string;
+}
+
+export interface IndicatorDefinition {
+  id: string; code: string; name: string; achievementType: AchievementType;
+  unit: string; builtIn: boolean; enabled: boolean; createdAt: string; updatedAt: string;
+}
+
+export type IndicatorPublishStatus = '草稿' | '已下发';
+export interface TopicIndicator {
+  id: string; projectId: string; topicId: string; indicatorDefinitionId: string;
+  achievementType: AchievementType; nodeId: string; targetQuantity: number;
+  status: IndicatorPublishStatus; version: number; publishedAt?: string; publishedBy?: string;
+  createdAt: string; updatedAt: string;
+}
+
+export interface UnitIndicatorAllocation {
+  id: string; projectId: string; topicId: string; membershipId: string; unitId: string;
+  topicIndicatorId: string; indicatorDefinitionId: string; achievementType: AchievementType;
+  nodeId: string; targetQuantity: number; status: IndicatorPublishStatus; version: number;
+  publishedAt?: string; publishedBy?: string; createdAt: string; updatedAt: string;
 }
 
 // 佐证材料规则
@@ -89,6 +119,7 @@ export interface Achievement {
   achievementType: AchievementType;
 
   indicatorId: string; nodeId: string;
+  topicUnitMembershipId?: string; uploadUnitId?: string; unitIndicatorAllocationId?: string;
 
   title: string; responsiblePerson: string; otherContributors?: string[];
   progressStatus: string;
@@ -98,6 +129,9 @@ export interface Achievement {
   createdAt: string; updatedAt: string; submittedAt?: string; remarks: string;
 
   approvalOpinion?: string; approvedAt?: string; approver?: string;
+  recordVersion?: number; externalSubmissionDate?: string; externalSubmissionNumber?: string;
+  returnReason?: string; abstract?: string; keywords?: string; researchDirection?: string;
+  history?: AchievementHistoryRecord[];
 
   // 状态字段（替代旧认定类型）
   paperStatus?: string;  // 撰写中 | 已投稿 | 已录用 | 已正式刊出
@@ -112,6 +146,7 @@ export interface Achievement {
   signingUnitList?: string; firstSigningUnit?: string; firstAuthorUnit?: string;
   submissionDate?: string; acceptanceDate?: string; publicationDate?: string;
   projectLabeling?: string; journalYearVolumePage?: string; // 期刊年/卷/期/页码
+  englishTitle?: string; journalLevel?: string; intendedJournal?: string;
 
   // 专利特有
   patentScope?: '国内' | '国际'; applicant?: string; applicantList?: string;
@@ -121,6 +156,7 @@ export interface Achievement {
   receiptDate?: string; grantDate?: string; patentNumber?: string;
   grantPublicationNumber?: string; grantPublicationDate?: string;
   patentHolderList?: string; legalStatus?: string;
+  technicalField?: string; applicationCountry?: string; ownershipDescription?: string;
 
   // 软著特有
   shortName?: string; version?: string; softwareFullName?: string;
@@ -129,6 +165,9 @@ export interface Achievement {
   firstDeveloperUnit?: string; softwareMainFunctions?: string;
   completionDate?: string; registrationApplicationDate?: string;
   registrationNumber?: string; certificateDate?: string;
+  firstPublicationDate?: string; developmentMode?: string; rightsScope?: string;
+  softwareCategory?: string; operatingPlatform?: string; developmentLanguage?: string;
+  technicalFeatures?: string;
 
   // 标准特有
   standardLevel?: string; leadingUnit?: string; participatingUnits?: string;
@@ -143,6 +182,11 @@ export interface Achievement {
   expectedGraduationDate?: string; actualGraduationDate?: string; trainingStatus?: string;
 
   materials: AchievementMaterial[];
+}
+
+export interface AchievementHistoryRecord {
+  id: string; action: string; fromStatus?: AchievementStatus; toStatus: AchievementStatus;
+  operatorId: string; operatorName?: string; opinion?: string; operatedAt: string; version: number;
 }
 
 // 预警
@@ -236,7 +280,7 @@ export interface ApprovalValidation {
 
 // 用户与认证
 export type UserRole =
-  | '系统管理员' | '项目技术负责人' | '科研助理' | '课题牵头单位';
+  | '系统管理员' | '项目技术负责人' | '科研助理' | '课题牵头单位' | '课题承担单位';
 
 export type DataScope = 'ALL' | 'TOPICS';
 
@@ -249,7 +293,8 @@ export type PagePermissionKey =
   | 'user-management' | 'role-permission' | 'dictionary' | 'system-config';
 
 export type ActionPermissionKey =
-  | 'topic.manage' | 'indicator.manage' | 'warning.manage'
+  | 'topic.manage' | 'indicator.manage' | 'indicator.catalog.manage' | 'topic-indicator.publish'
+  | 'topic-unit.manage' | 'unit-allocation.manage' | 'unit-allocation.publish' | 'warning.manage'
   | 'achievement.submit' | 'achievement.initial.approve' | 'achievement.final.approve'
   | 'report.submit' | 'report.initial.approve' | 'report.final.approve'
   | 'archive.public.submit' | 'archive.topic.submit' | 'archive.initial.approve' | 'archive.final.approve'
