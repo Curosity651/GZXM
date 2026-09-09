@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Avatar, Button, Dropdown, Layout, Menu, Modal, Space, Tag, Typography, message } from 'antd';
 import type { MenuProps } from 'antd';
 import {
-  BellOutlined, DashboardOutlined, FileDoneOutlined, FileTextOutlined,
+  DashboardOutlined, FileDoneOutlined, FileTextOutlined,
   HomeOutlined, InboxOutlined, LogoutOutlined, SafetyCertificateOutlined,
   SettingOutlined, TeamOutlined, UserOutlined,
 } from '@ant-design/icons';
@@ -94,7 +94,6 @@ export function AppLayout() {
           <div><div className="brand-title">GZXM 科研管理</div><div className="brand-subtitle">重点项目协同工作台</div></div>
         </div>
         <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['indicator-group', 'achievement-group', 'archive-group', 'admin-group']} items={visibleMenu(menuTree, currentUser, roles) as MenuProps['items']} />
-        <div className="sider-foot"><BellOutlined /> Mock 原型 · 数据仅存本机</div>
       </Sider>
       <Layout>
         <Header className="app-header">
