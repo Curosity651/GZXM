@@ -2,7 +2,7 @@ import { Card, Descriptions, Drawer, Select, Space, Table, Tag } from 'antd';
 import { useState } from 'react';
 import type { Achievement } from '../../types';
 import { useAppStore } from '../../store';
-import { filterByTopicScope } from '../../domain/permissions';
+import { canViewAchievement } from '../../domain/topic-access';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatusTag } from '../../components/common/StatusTag';
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
@@ -11,7 +11,7 @@ export function AchievementQueryPage() {
   const state = useAppStore();
   const [detail, setDetail] = useState<Achievement | null>(null);
   const [type, setType] = useState<string>();
-  const scoped = filterByTopicScope(state.currentUser!, state.achievements).filter((item) => !type || item.achievementType === type);
+  const scoped = state.achievements.filter((item) => canViewAchievement(state.currentUser!, item, state.topicMemberships)).filter((item) => !type || item.achievementType === type);
   return <>
     <PageHeader title="成果全周期查询" description="查询预审、正式审批、指标计入和历史意见。" />
     <Card title={<Space>成果类型<Select allowClear placeholder="全部类型" style={{ width: 180 }} value={type} onChange={setType} options={[...new Set(state.achievements.map((item) => item.achievementType))].map((item) => ({ label: item, value: item }))} /></Space>}>

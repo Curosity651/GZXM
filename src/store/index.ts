@@ -112,14 +112,16 @@ export interface AppState extends AppData {
 }
 
 export function createInitialState(): AppData {
-  const normalizedAchievements = MOCK_ACHIEVEMENTS.map((achievement): Achievement => {
+  const normalizedAchievements = [...MOCK_ACHIEVEMENTS, ...MOCK_WORKFLOW_ACHIEVEMENTS].map((achievement): Achievement => {
     const statusMap: Record<string, Achievement['status']> = {
       草稿: achievement.achievementType === '人才培养' ? '正式成果草稿' : '预审草稿',
       已提交: '预审初审中', 审批中: '预审初审中', 审批通过: '已生效',
       审批不通过: '预审退回', 退回修改: '预审退回',
     };
     const status = statusMap[achievement.status] ?? achievement.status;
-    return { ...achievement, status, countsToIndicator: status === '已生效' };
+    const membership = MOCK_TOPIC_MEMBERSHIPS.find((item) => item.topicId === achievement.topicId && item.unitId === achievement.unitId);
+    const allocation = MOCK_UNIT_INDICATOR_ALLOCATIONS.find((item) => item.topicId === achievement.topicId && item.unitId === achievement.unitId && item.achievementType === achievement.achievementType);
+    return { ...achievement, status, countsToIndicator: status === '已生效', uploadUnitId: achievement.uploadUnitId ?? achievement.unitId, topicUnitMembershipId: achievement.topicUnitMembershipId ?? membership?.id, unitIndicatorAllocationId: achievement.unitIndicatorAllocationId ?? allocation?.id, recordVersion: achievement.recordVersion ?? 1, history: achievement.history ?? [] };
   });
   return structuredClone({
     project: MOCK_PROJECT,
@@ -132,7 +134,7 @@ export function createInitialState(): AppData {
     topicMemberships: MOCK_TOPIC_MEMBERSHIPS,
     unitIndicatorAllocations: MOCK_UNIT_INDICATOR_ALLOCATIONS,
     warningRules: MOCK_WARNING_RULES,
-    achievements: [...normalizedAchievements, ...MOCK_WORKFLOW_ACHIEVEMENTS],
+    achievements: normalizedAchievements,
     approvalRecords: MOCK_APPROVAL_RECORDS,
     reportTasks: MOCK_REPORT_TASKS,
     reports: MOCK_REPORTS,
@@ -188,8 +190,18 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   saveIndicatorDefinition: (definition) => set((state) => ({ indicatorDefinitions: state.indicatorDefinitions.some((item) => item.id === definition.id) ? state.indicatorDefinitions.map((item) => item.id === definition.id ? definition : item) : [...state.indicatorDefinitions, definition] })),
   saveTopicIndicators: (rows) => set((state) => ({ topicIndicators: [...state.topicIndicators.filter((item) => !rows.some((row) => row.id === item.id)), ...rows] })),
   publishTopicIndicators: (topicId, operatorName) => set((state) => ({ topicIndicators: state.topicIndicators.map((item) => item.topicId === topicId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operatorName, updatedAt: today() } : item) })),
-  saveTopicMembership: (membership) => set((state) => ({ topicMemberships: state.topicMemberships.some((item) => item.id === membership.id) ? state.topicMemberships.map((item) => item.id === membership.id ? membership : item) : [...state.topicMemberships, membership] })),
-  toggleTopicMembership: (id, enabled) => set((state) => ({ topicMemberships: state.topicMemberships.map((item) => item.id === id && item.membershipType !== 'LEAD' ? { ...item, enabled, updatedAt: today() } : item) })),
+  saveTopicMembership: (membership) => set((state) => ({
+    topicMemberships: state.topicMemberships.some((item) => item.id === membership.id) ? state.topicMemberships.map((item) => item.id === membership.id ? membership : item) : [...state.topicMemberships, membership],
+    users: state.users.map((user) => user.unitId === membership.unitId && membership.enabled ? { ...user, dataScope: 'TOPICS', topicIds: [...new Set([...(user.topicIds ?? []), membership.topicId])], topicId: user.topicId ?? membership.topicId } : user),
+  })),
+  toggleTopicMembership: (id, enabled) => set((state) => {
+    const membership = state.topicMemberships.find((item) => item.id === id);
+    if (!membership || membership.membershipType === 'LEAD') return {};
+    return {
+      topicMemberships: state.topicMemberships.map((item) => item.id === id ? { ...item, enabled, updatedAt: today() } : item),
+      users: state.users.map((user) => user.unitId === membership.unitId ? { ...user, topicIds: enabled ? [...new Set([...(user.topicIds ?? []), membership.topicId])] : (user.topicIds ?? []).filter((topicId) => topicId !== membership.topicId) } : user),
+    };
+  }),
   saveUnitAllocations: (rows) => set((state) => ({ unitIndicatorAllocations: [...state.unitIndicatorAllocations.filter((item) => !rows.some((row) => row.id === item.id)), ...rows] })),
   publishUnitAllocations: (topicId, operatorName) => set((state) => ({ unitIndicatorAllocations: state.unitIndicatorAllocations.map((item) => item.topicId === topicId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operatorName, updatedAt: today() } : item) })),
   updateWarningRule: (id, updates) => set((state) => ({ warningRules: state.warningRules.map((rule) => rule.id === id ? { ...rule, ...updates } : rule) })),
@@ -205,11 +217,12 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const operator = get().users.find((user) => user.id === operatorId);
     if (!current || !operator) throw new Error('成果或操作人不存在');
     if (!canPerform(operator, get().roles, 'achievement.submit') || !canAccessTopic(operator, current.topicId)) throw new Error('没有该课题成果的提交权限');
-    if (!['SUBMIT_PRE_REVIEW', 'START_FORMAL', 'SUBMIT_FORMAL'].includes(action)) throw new Error('该动作不是成果提交动作');
+    if (!['SUBMIT_PRE_REVIEW', 'REGISTER_EXTERNAL_SUBMISSION', 'START_FORMAL', 'SUBMIT_FORMAL'].includes(action)) throw new Error('该动作不是成果提交动作');
     const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
     set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? {
       ...achievement, status: nextStatus, submittedAt: action.startsWith('SUBMIT') ? today() : achievement.submittedAt,
-      updatedAt: today(), countsToIndicator: false,
+      updatedAt: today(), countsToIndicator: false, recordVersion: (achievement.recordVersion ?? 0) + 1,
+      history: [...(achievement.history ?? []), { id: `history-${Date.now()}-${id}`, action, fromStatus: achievement.status, toStatus: nextStatus, operatorId, operatorName: operator.name, operatedAt: new Date().toISOString(), version: (achievement.recordVersion ?? 0) + 1 }],
     } : achievement) }));
   },
   reviewAchievement: (id, action, operatorId, opinion) => {
@@ -234,7 +247,9 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     set((state) => ({
       achievements: state.achievements.map((achievement) => achievement.id === id ? {
         ...achievement, status: nextStatus, countsToIndicator: nextStatus === '已生效', updatedAt: today(),
-        approvalOpinion: opinion, approver: operator.name, approvedAt: today(),
+        approvalOpinion: opinion, approver: operator.name, approvedAt: today(), returnReason: action === 'RETURN' ? opinion : undefined,
+        recordVersion: (achievement.recordVersion ?? 0) + 1,
+        history: [...(achievement.history ?? []), { id: `history-${Date.now()}-${id}`, action, fromStatus: achievement.status, toStatus: nextStatus, operatorId, operatorName: operator.name, opinion, operatedAt: new Date().toISOString(), version: (achievement.recordVersion ?? 0) + 1 }],
       } : achievement),
       approvalRecords: [...state.approvalRecords, record],
     }));

@@ -4,7 +4,8 @@ import { CheckOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons'
 import type { Achievement } from '../../types';
 import { useAppStore } from '../../store';
 import type { AchievementAction } from '../../domain/workflows';
-import { canPerform, filterByTopicScope } from '../../domain/permissions';
+import { canPerform } from '../../domain/permissions';
+import { canViewAchievement } from '../../domain/topic-access';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatusTag } from '../../components/common/StatusTag';
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
@@ -19,8 +20,8 @@ export function AchievementApprovalPage() {
   const [detail, setDetail] = useState<Achievement | null>(null);
   const [opinion, setOpinion] = useState('');
   const [decisionOpen, setDecisionOpen] = useState<'approve' | 'return' | null>(null);
-  const reviewable = useMemo(() => filterByTopicScope(user, state.achievements).filter((item) =>
-    (canInitial && ['预审初审中', '正式初审中'].includes(item.status)) || (canFinal && ['预审终审中', '正式终审中'].includes(item.status))), [canFinal, canInitial, state.achievements, user]);
+  const reviewable = useMemo(() => state.achievements.filter((item) => canViewAchievement(user, item, state.topicMemberships)).filter((item) =>
+    (canInitial && ['预审初审中', '正式初审中'].includes(item.status)) || (canFinal && ['预审终审中', '正式终审中'].includes(item.status))), [canFinal, canInitial, state.achievements, state.topicMemberships, user]);
   const topicMap = Object.fromEntries(state.topics.map((topic) => [topic.id, topic.name]));
   const currentAction: AchievementAction | null = detail?.status.includes('初审中') && canInitial ? 'APPROVE_INITIAL' : detail?.status.includes('终审中') && canFinal ? 'APPROVE_FINAL' : null;
   const confirmDecision = () => {
@@ -34,6 +35,7 @@ export function AchievementApprovalPage() {
   const list = (items: Achievement[]) => <Table rowKey="id" dataSource={items} columns={[
     { title: '成果名称', dataIndex: 'title', render: (value, row) => <div><Text strong>{value}</Text><div><Tag>{row.achievementType}</Tag></div></div> },
     { title: '所属课题', dataIndex: 'topicId', render: (value) => topicMap[value] ?? value },
+    { title: '上传单位', dataIndex: 'uploadUnitId', render: (value, row) => state.units.find((item) => item.id === (value ?? row.unitId))?.name ?? '—' },
     { title: '负责人', dataIndex: 'responsiblePerson', width: 110 },
     { title: '审批阶段', dataIndex: 'status', width: 140, render: (value) => <StatusTag status={value} /> },
     { title: '提交时间', dataIndex: 'submittedAt', width: 120 },

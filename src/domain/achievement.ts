@@ -12,5 +12,5 @@ export function reviewActionFor(status: AchievementWorkflowStatus, role: UserRol
 }
 
 export function isEditableAchievementStatus(status: string): boolean {
-  return ['预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(status);
+  return ['预审草稿', '预审退回', '允许投稿/申请', '已投稿/已申请', '正式成果草稿', '正式退回'].includes(status);
 }

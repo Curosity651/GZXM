@@ -1,10 +1,11 @@
 import { Alert, Card, Col, List, Progress, Row, Space, Statistic, Table, Tag, Typography } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined, FileDoneOutlined, FolderOpenOutlined, RiseOutlined, WarningOutlined } from '@ant-design/icons';
 import { useAppStore } from '../store';
-import { buildTopicSummaries } from '../domain/monitoring';
+import { buildTopicSummariesV2 } from '../domain/monitoring';
 import { PageHeader } from '../components/common/PageHeader';
 import { StatusTag } from '../components/common/StatusTag';
 import { canPerform, filterByTopicScope, getRole } from '../domain/permissions';
+import { canViewAchievement } from '../domain/topic-access';
 
 const { Text } = Typography;
 
@@ -12,21 +13,23 @@ export function HomePage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const role = getRole(user, state.roles);
-  const summaries = buildTopicSummaries(state.topics, state.indicators, state.achievements, state.currentUser ?? undefined);
-  const effective = state.achievements.filter((item) => item.status === '已生效' || item.status === '审批通过').length;
+  const summaries = buildTopicSummariesV2(state.topics, state.topicMemberships, state.topicIndicators, state.achievements, user);
+  const visibleAchievements = state.achievements.filter((item) => canViewAchievement(user, item, state.topicMemberships));
+  const effective = visibleAchievements.filter((item) => item.status === '已生效').length;
   const reportDone = state.reports.filter((item) => item.status === '已通过').length;
   const archiveDone = state.archiveSubmissions.filter((item) => item.status === '已通过').length;
-  const waiting = state.achievements.filter((item) => item.status.includes('初审中') || item.status.includes('终审中')).length + state.reports.filter((item) => ['初审中', '终审中'].includes(item.status)).length;
+  const waiting = visibleAchievements.filter((item) => item.status.includes('初审中') || item.status.includes('终审中')).length + state.reports.filter((item) => ['初审中', '终审中'].includes(item.status)).length;
   const roleHint: Record<string, string> = {
     系统管理员: '你可以查看全部业务页面并维护账号与系统配置，业务审批按钮默认关闭。',
     项目技术负责人: '重点关注待终审事项、课题横向进度和高风险预警。',
     科研助理: '重点处理成果、报告和归档初审，并维护课题指标与项目公共材料。',
     课题牵头单位: '请及时办理本课题成果、月季报、国家材料和配套自筹项目归档。',
+    课题承担单位: '请按已分配指标提交本单位成果，并在投稿或申请前完成预审。',
   };
   const initialReviewer = canPerform(user, state.roles, 'achievement.initial.approve');
   const finalReviewer = canPerform(user, state.roles, 'achievement.final.approve');
   const tasks = [
-    ...filterByTopicScope(user, state.achievements).filter((item) => (initialReviewer && item.status.includes('初审中')) || (finalReviewer && item.status.includes('终审中'))).slice(0, 3).map((item) => ({ title: item.title, status: item.status, type: '成果审批' })),
+    ...visibleAchievements.filter((item) => (initialReviewer && item.status.includes('初审中')) || (finalReviewer && item.status.includes('终审中'))).slice(0, 3).map((item) => ({ title: item.title, status: item.status, type: '成果审批' })),
     ...filterByTopicScope(user, state.reports).filter((item) => (canPerform(user, state.roles, 'report.initial.approve') && item.status === '初审中') || (canPerform(user, state.roles, 'report.final.approve') && item.status === '终审中')).slice(0, 2).map((item) => ({ title: `${item.reportType === 'MONTHLY' ? '月报' : '季报'} · ${state.topics.find((topic) => topic.id === item.topicId)?.name}`, status: item.status, type: '进度报告' })),
   ];
 

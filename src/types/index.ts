@@ -118,7 +118,7 @@ export interface Achievement {
   id: string; projectId: string; topicId: string; unitId: string;
   achievementType: AchievementType;
 
-  indicatorId: string; nodeId: string;
+  indicatorId: string; nodeId: string; indicatorDefinitionId?: string;
   topicUnitMembershipId?: string; uploadUnitId?: string; unitIndicatorAllocationId?: string;
 
   title: string; responsiblePerson: string; otherContributors?: string[];

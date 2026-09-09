@@ -25,15 +25,24 @@ export function PatentFields() {
         </Form.Item>
       </Col>
       <Col span={12}>
+        <Form.Item label="技术领域" name="technicalField"><Input /></Form.Item>
+      </Col>
+      <Col span={12}>
+        <Form.Item label="申请国家/地区" name="applicationCountry"><Input /></Form.Item>
+      </Col>
+      <Col span={24}><Form.Item label="专利摘要" name="abstract"><Input.TextArea rows={3} /></Form.Item></Col>
+      <Col span={24}><Form.Item label="权利归属说明" name="ownershipDescription"><Input.TextArea rows={2} /></Form.Item></Col>
+      <Col span={12}>
         <Form.Item label="申请人" name="applicant">
           <Input />
         </Form.Item>
       </Col>
       <Col span={24}>
-        <Form.Item label="发明人及排序" name="inventors">
+        <Form.Item label="发明人及排序" name="inventorList">
           <Input />
         </Form.Item>
       </Col>
+      <Col span={24}><Form.Item label="申请人及排序" name="applicantList"><Input /></Form.Item></Col>
       <Col span={12}>
         <Form.Item label="申请号" name="applicationNumber">
           <Input />
@@ -49,6 +58,7 @@ export function PatentFields() {
           <Input type="date" />
         </Form.Item>
       </Col>
+      <Col span={12}><Form.Item label="公开号" name="grantPublicationNumber"><Input /></Form.Item></Col>
       <Col span={12}>
         <Form.Item label="受理时间" name="receiptDate">
           <Input type="date" />

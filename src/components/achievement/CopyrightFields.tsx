@@ -18,6 +18,7 @@ export function CopyrightFields() {
           <Input />
         </Form.Item>
       </Col>
+      <Col span={24}><Form.Item label="著作权人及排序" name="copyrightOwnerList"><Input /></Form.Item></Col>
       <Col span={12}>
         <Form.Item label="软件开发者" name="developers">
           <Input />
@@ -28,6 +29,14 @@ export function CopyrightFields() {
           <Input type="date" />
         </Form.Item>
       </Col>
+      <Col span={12}><Form.Item label="首次发表日期" name="firstPublicationDate"><Input type="date" /></Form.Item></Col>
+      <Col span={12}><Form.Item label="开发方式" name="developmentMode"><Input placeholder="独立开发/合作开发" /></Form.Item></Col>
+      <Col span={12}><Form.Item label="权利范围" name="rightsScope"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="软件分类" name="softwareCategory"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="运行平台" name="operatingPlatform"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="开发语言" name="developmentLanguage"><Input /></Form.Item></Col>
+      <Col span={24}><Form.Item label="主要功能" name="softwareMainFunctions"><Input.TextArea rows={3} /></Form.Item></Col>
+      <Col span={24}><Form.Item label="技术特点" name="technicalFeatures"><Input.TextArea rows={3} /></Form.Item></Col>
       <Col span={12}>
         <Form.Item label="登记申请日期" name="registrationApplicationDate">
           <Input type="date" />

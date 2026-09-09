@@ -33,7 +33,7 @@ const menuTree: MenuNode[] = [
   },
   {
     key: 'achievement-group', label: '成果管理', icon: <FileDoneOutlined />, children: [
-      { key: '/achievement-entry', label: <Link to="/achievement-entry">成果填报</Link>, page: 'achievement-entry' },
+      { key: '/achievement-entry', label: <Link to="/achievement-entry">成果管理</Link>, page: 'achievement-entry' },
       { key: '/achievement-approval', label: <Link to="/achievement-approval">成果审批</Link>, page: 'achievement-review' },
       { key: '/achievement-query', label: <Link to="/achievement-query">成果查询</Link>, page: 'achievement-query' },
     ],

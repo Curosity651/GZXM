@@ -25,6 +25,18 @@ export function PaperFields() {
         </Form.Item>
       </Col>
       <Col span={12}>
+        <Form.Item label="英文题目" name="englishTitle"><Input /></Form.Item>
+      </Col>
+      <Col span={12}>
+        <Form.Item label="研究方向" name="researchDirection"><Input /></Form.Item>
+      </Col>
+      <Col span={12}>
+        <Form.Item label="拟投期刊/会议" name="intendedJournal"><Input /></Form.Item>
+      </Col>
+      <Col span={12}>
+        <Form.Item label="期刊级别" name="journalLevel"><Input placeholder="如：SCI 一区、中文核心" /></Form.Item>
+      </Col>
+      <Col span={12}>
         <Form.Item label="期刊名称" name="journalName">
           <Input />
         </Form.Item>
@@ -59,11 +71,17 @@ export function PaperFields() {
           <Input />
         </Form.Item>
       </Col>
+      <Col span={24}><Form.Item label="作者及排序" name="signingUnitList"><Input.TextArea rows={2} placeholder="填写作者及署名单位排序" /></Form.Item></Col>
+      <Col span={12}><Form.Item label="第一作者单位" name="firstAuthorUnit"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="第一署名单位" name="firstSigningUnit"><Input /></Form.Item></Col>
+      <Col span={24}><Form.Item label="摘要" name="abstract"><Input.TextArea rows={3} /></Form.Item></Col>
+      <Col span={24}><Form.Item label="关键词" name="keywords"><Input placeholder="多个关键词使用顿号分隔" /></Form.Item></Col>
       <Col span={12}>
         <Form.Item label="投稿时间" name="submissionDate">
           <Input type="date" />
         </Form.Item>
       </Col>
+      <Col span={12}><Form.Item label="投稿编号" name="externalSubmissionNumber"><Input /></Form.Item></Col>
       <Col span={12}>
         <Form.Item label="录用时间" name="acceptanceDate">
           <Input type="date" />

@@ -22,9 +22,10 @@ interface AchievementFormProps {
   topics: TopicInfo[];
   units: UnitInfo[];
   achievement?: Achievement;
+  lockOwnership?: boolean;
 }
 
-export function AchievementForm({ form, topics, units }: AchievementFormProps) {
+export function AchievementForm({ form, topics, units, lockOwnership = false }: AchievementFormProps) {
   const achievementType = Form.useWatch('achievementType', form);
   const topicId = Form.useWatch('topicId', form);
   const topic = topics.find((t) => t.id === topicId);
@@ -41,6 +42,7 @@ export function AchievementForm({ form, topics, units }: AchievementFormProps) {
             <Form.Item label="所属课题" name="topicId" rules={[{ required: true, message: '请选择课题' }]}>
               <Select
                 placeholder="选择课题"
+                disabled={lockOwnership}
                 onChange={() => form.setFieldsValue({ unitId: undefined })}
               >
                 {topics.map((t) => (
@@ -51,7 +53,7 @@ export function AchievementForm({ form, topics, units }: AchievementFormProps) {
           </Col>
           <Col span={12}>
             <Form.Item label="责任单位" name="unitId" rules={[{ required: true, message: '请选择责任单位' }]}>
-              <Select placeholder="选择责任单位" disabled={!topicId}>
+              <Select placeholder="选择责任单位" disabled={!topicId || lockOwnership}>
                 {unitOptions.map((uid) => (
                   <Option key={uid} value={uid}>{unitMap[uid] || uid}</Option>
                 ))}
@@ -60,7 +62,7 @@ export function AchievementForm({ form, topics, units }: AchievementFormProps) {
           </Col>
           <Col span={12}>
             <Form.Item label="成果类型" name="achievementType" rules={[{ required: true, message: '请选择成果类型' }]}>
-              <Select placeholder="选择成果类型">
+              <Select placeholder="选择成果类型" disabled={lockOwnership}>
                 {ACHIEVEMENT_TYPES.map((t) => (
                   <Option key={t} value={t}>{t}</Option>
                 ))}

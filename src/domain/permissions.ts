@@ -54,12 +54,12 @@ export const ALL_ACTION_PERMISSIONS = ACTION_PERMISSION_OPTIONS.map((item) => it
 const pagePermissions: Record<UserRole, PageKey[] | 'ALL'> = {
   系统管理员: 'ALL',
   项目技术负责人: [
-    'home', 'topic-indicator', 'indicator-monitoring', 'achievement-review', 'achievement-query',
+    'home', 'topic-indicator', 'indicator-monitoring', 'achievement-entry', 'achievement-review', 'achievement-query',
     'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive',
     'archive-review', 'archive-monitoring',
   ],
   科研助理: [
-    'home', 'topic-indicator', 'indicator-monitoring', 'warning-rules', 'achievement-review', 'achievement-query',
+    'home', 'topic-indicator', 'indicator-monitoring', 'warning-rules', 'achievement-entry', 'achievement-review', 'achievement-query',
     'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive',
     'archive-review', 'archive-monitoring',
   ],
@@ -118,7 +118,7 @@ export function canPerform(role: UserRole, action: ActionKey): boolean;
 export function canPerform(userOrRole: User | UserRole, rolesOrAction: RbacRole[] | ActionKey, actionArg?: ActionKey): boolean {
   if (typeof userOrRole === 'string') return actionPermissions[rolesOrAction as ActionKey]?.includes(userOrRole) ?? false;
   const role = getRole(userOrRole, rolesOrAction as RbacRole[]);
-  return Boolean(role?.enabled && (role.builtIn || role.actionPermissions.includes(actionArg!)));
+  return Boolean(role?.enabled && role.actionPermissions.includes(actionArg!));
 }
 
 export function canAccessTopic(user: User, topicId?: string): boolean {
