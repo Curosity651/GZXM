@@ -4,8 +4,8 @@ import { FileAddOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import type { SelfFundedProject } from '../../types';
 import { useAppStore } from '../../store';
 import { archiveCompletion } from '../../domain/archive';
-import { canAccessTopic, canPerform, filterByTopicScope } from '../../domain/permissions';
-import { PageHeader } from '../../components/common/PageHeader';
+import { canPerform } from '../../domain/permissions';
+import { accessibleTopics, canAccessTopicByMembership, isGlobalUser, isInternalTopicUnit, isTopicLead } from '../../domain/topic-access';
 import { StatusTag } from '../../components/common/StatusTag';
 import { RequirementChecklist } from '../../components/archive/RequirementChecklist';
 
@@ -14,23 +14,34 @@ const templateMap = { 科技项目: 'tpl-tech-v1', 技改项目: 'tpl-renovation
 export function SelfFundedProjectPage() {
   const state = useAppStore();
   const user = state.currentUser!;
-  const projects = filterByTopicScope(user, state.selfFundedProjects);
-  const editable = canPerform(user, state.roles, 'self-funded.manage');
-  const primaryTopicId = user.topicIds?.[0] ?? user.topicId;
+  const topics = accessibleTopics(user, state.topics, state.topicMemberships);
+  const projects = state.selfFundedProjects.filter((project) => isGlobalUser(user) || (canAccessTopicByMembership(user, project.topicId, state.topicMemberships) && (project.ownerUnitId === user.unitId || isTopicLead(user, project.topicId, state.topicMemberships))));
+  const editable = isInternalTopicUnit(user) && canPerform(user, state.roles, 'self-funded.manage');
+  const primaryTopicId = topics[0]?.id;
   const [form] = Form.useForm<Partial<SelfFundedProject>>();
   const [modal, setModal] = useState(false);
   const [selected, setSelected] = useState<SelfFundedProject | null>(null);
+  const [topicFilter, setTopicFilter] = useState(primaryTopicId);
+  const [unitFilter, setUnitFilter] = useState(isGlobalUser(user) ? undefined : user.unitId);
+  const filteredProjects = projects.filter((project) => (!topicFilter || project.topicId === topicFilter) && (!unitFilter || project.ownerUnitId === unitFilter));
+  const unitOptions = state.units.filter((unit) => projects.some((project) => project.ownerUnitId === unit.id)).map((unit) => ({ label: unit.name, value: unit.id }));
   const requirementsFor = (project: SelfFundedProject) => state.archiveRequirements.filter((item) => item.ownerType === 'SELF_FUNDED' && item.templateId === project.templateSnapshotId);
   const addProject = async () => {
     const values = await form.validateFields(); const projectType = values.projectType!;
-    state.addSelfFundedProject({ id: `sf-${Date.now()}`, topicId: values.topicId ?? primaryTopicId!, code: values.code!, name: values.name!, projectType, principalName: values.principalName!, implementingUnit: values.implementingUnit!, startDate: values.startDate, endDate: values.endDate, budget: values.budget, status: values.status ?? '筹备中', templateSnapshotId: templateMap[projectType], remarks: values.remarks }, user.id);
+    state.addSelfFundedProject({ id: `sf-${Date.now()}`, topicId: values.topicId ?? primaryTopicId!, ownerUnitId: user.unitId!, code: values.code!, name: values.name!, projectType, principalName: values.principalName!, implementingUnit: state.units.find((item) => item.id === user.unitId)?.name ?? user.name, startDate: values.startDate, endDate: values.endDate, budget: values.budget, status: values.status ?? '筹备中', templateSnapshotId: templateMap[projectType], remarks: values.remarks }, user.id);
     setModal(false); form.resetFields(); message.success('配套自筹项目已创建，并已生成对应类型的归档清单快照');
   };
   const cardActions = (project: SelfFundedProject) => [<Button key={`open-${project.id}`} type="link" onClick={() => setSelected(project)}>进入归档</Button>];
   return <>
-    <PageHeader title="配套自筹项目" description="配套自筹项目只用于材料归档，不承接科研指标，也不单独提交月报或季报。" extra={editable && <Button type="primary" icon={<FileAddOutlined />} onClick={() => setModal(true)}>新建自筹项目</Button>} />
-    <Row gutter={[16, 16]}>{projects.map((project) => { const completion = archiveCompletion(requirementsFor(project), state.archiveSubmissions.filter((item) => item.ownerType === 'SELF_FUNDED' && item.ownerId === project.id)); return <Col xs={24} xl={12} key={project.id}><Card hoverable title={<Space><FolderOpenOutlined /><span>{project.name}</span></Space>} extra={<StatusTag status={project.status} />} actions={cardActions(project)}><Space direction="vertical" style={{ width: '100%' }}><Space><Tag color="blue">{project.projectType}</Tag><Tag>{project.code}</Tag></Space><div>项目负责人：{project.principalName}　实施单位：{project.implementingUnit}</div><Progress percent={completion.rate} status={completion.rate < 50 ? 'exception' : 'active'} /><div>{completion.completed}/{completion.required} 项材料终审通过</div></Space></Card></Col>; })}</Row>
-    <Modal title="新建配套自筹项目" open={modal} onCancel={() => setModal(false)} onOk={addProject} width={680}><Form form={form} layout="vertical" initialValues={{ topicId: primaryTopicId }}><Form.Item label="所属课题" name="topicId" rules={[{ required: true }]}><Select options={filterByTopicScope(user, state.topics).map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} /></Form.Item><Row gutter={16}><Col span={12}><Form.Item label="项目编号" name="code" rules={[{ required: true }]}><Input /></Form.Item></Col><Col span={12}><Form.Item label="项目类型" name="projectType" rules={[{ required: true }]}><Select options={Object.keys(templateMap).map((item) => ({ label: item, value: item }))} /></Form.Item></Col></Row><Form.Item label="项目名称" name="name" rules={[{ required: true }]}><Input /></Form.Item><Row gutter={16}><Col span={12}><Form.Item label="项目负责人" name="principalName" rules={[{ required: true }]}><Input /></Form.Item></Col><Col span={12}><Form.Item label="实施单位" name="implementingUnit" rules={[{ required: true }]}><Input /></Form.Item></Col></Row><Row gutter={16}><Col span={8}><Form.Item label="开始日期" name="startDate"><Input type="date" /></Form.Item></Col><Col span={8}><Form.Item label="结束日期" name="endDate"><Input type="date" /></Form.Item></Col><Col span={8}><Form.Item label="预算（万元）" name="budget"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col></Row><Form.Item label="状态" name="status" initialValue="筹备中"><Select options={['筹备中', '实施中', '验收中', '已完成'].map((item) => ({ label: item, value: item }))} /></Form.Item></Form></Modal>
-    <Drawer width="88%" title={selected ? `${selected.name} · ${selected.projectType}归档清单` : ''} open={Boolean(selected)} onClose={() => setSelected(null)}>{selected && <RequirementChecklist requirements={requirementsFor(selected)} ownerType="SELF_FUNDED" ownerId={selected.id} topicId={selected.topicId} editable={editable && canAccessTopic(user, selected.topicId)} />}</Drawer>
+    <Card className="archive-filter-card" style={{ marginBottom: 16 }}>
+      <Space wrap size={16}>
+        <b>课题</b><Select allowClear value={topicFilter} onChange={setTopicFilter} style={{ width: 360 }} placeholder="全部课题" options={topics.map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} />
+        <b>提交单位</b><Select allowClear value={unitFilter} onChange={setUnitFilter} style={{ width: 320 }} placeholder="全部单位" options={unitOptions} />
+      </Space>
+    </Card>
+    {editable && <div className="archive-page-actions"><Button type="primary" icon={<FileAddOutlined />} onClick={() => setModal(true)}>新建自筹项目</Button></div>}
+    <Row gutter={[16, 16]}>{filteredProjects.map((project) => { const completion = archiveCompletion(requirementsFor(project), state.archiveSubmissions.filter((item) => item.ownerType === 'SELF_FUNDED' && item.ownerId === project.id)); return <Col xs={24} xl={12} key={project.id}><Card hoverable title={<Space><FolderOpenOutlined /><span>{project.name}</span></Space>} extra={<StatusTag status={project.status} />} actions={cardActions(project)}><Space direction="vertical" style={{ width: '100%' }}><Space><Tag color="blue">{project.projectType}</Tag><Tag>{project.code}</Tag><Tag>{state.units.find((item) => item.id === project.ownerUnitId)?.name ?? project.ownerUnitId}</Tag></Space><div>项目负责人：{project.principalName}　实施单位：{project.implementingUnit}</div><Progress percent={completion.rate} status={completion.rate < 50 ? 'exception' : 'active'} /><div>{completion.completed}/{completion.required} 项材料已归档</div></Space></Card></Col>; })}</Row>
+    <Modal title="新建配套自筹项目" open={modal} onCancel={() => setModal(false)} onOk={addProject} width={680}><Form form={form} layout="vertical" initialValues={{ topicId: primaryTopicId }}><Form.Item label="所属课题" name="topicId" rules={[{ required: true }]}><Select options={topics.map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} /></Form.Item><Row gutter={16}><Col span={12}><Form.Item label="项目编号" name="code" rules={[{ required: true }]}><Input /></Form.Item></Col><Col span={12}><Form.Item label="项目类型" name="projectType" rules={[{ required: true }]}><Select options={Object.keys(templateMap).map((item) => ({ label: item, value: item }))} /></Form.Item></Col></Row><Form.Item label="项目名称" name="name" rules={[{ required: true }]}><Input /></Form.Item><Row gutter={16}><Col span={12}><Form.Item label="项目负责人" name="principalName" rules={[{ required: true }]}><Input /></Form.Item></Col><Col span={12}><Form.Item label="实施单位"><Input value={state.units.find((item) => item.id === user.unitId)?.name} disabled /></Form.Item></Col></Row><Row gutter={16}><Col span={8}><Form.Item label="开始日期" name="startDate"><Input type="date" /></Form.Item></Col><Col span={8}><Form.Item label="结束日期" name="endDate"><Input type="date" /></Form.Item></Col><Col span={8}><Form.Item label="预算（万元）" name="budget"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col></Row><Form.Item label="状态" name="status" initialValue="筹备中"><Select options={['筹备中', '实施中', '验收中', '已完成'].map((item) => ({ label: item, value: item }))} /></Form.Item></Form></Modal>
+    <Drawer width="88%" title={selected ? `${selected.name} · ${selected.projectType}归档清单` : ''} open={Boolean(selected)} onClose={() => setSelected(null)}>{selected && <RequirementChecklist requirements={requirementsFor(selected)} ownerType="SELF_FUNDED" ownerId={selected.id} topicId={selected.topicId} unitId={selected.ownerUnitId} editable={editable && selected.ownerUnitId === user.unitId} />}</Drawer>
   </>;
 }

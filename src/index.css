@@ -11,13 +11,22 @@ body { margin: 0; min-width: 1180px; min-height: 100vh; background: #f3f6fb; }
 button, input, textarea, select { font: inherit; }
 
 .app-shell { min-height: 100vh; }
-.app-sider { position: sticky !important; top: 0; height: 100vh; overflow: auto; background: linear-gradient(180deg, #10244b 0%, #07162f 100%) !important; }
+.app-sider { position: sticky !important; top: 0; height: 100vh; overflow: hidden; background: linear-gradient(180deg, #10244b 0%, #07162f 100%) !important; }
+.app-sider .ant-layout-sider-children { display: flex; height: 100%; flex-direction: column; }
 .brand-block { height: 82px; padding: 18px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.1); color: white; }
+.brand-block.is-collapsed { justify-content: center; padding-inline: 10px; }
 .brand-mark { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: linear-gradient(135deg, #3f8cff, #69d6ff); box-shadow: 0 8px 22px rgba(47,127,255,.3); }
 .brand-title { font-size: 16px; font-weight: 700; letter-spacing: .5px; }
 .brand-subtitle { margin-top: 3px; font-size: 11px; color: rgba(255,255,255,.58); }
-.app-sider .ant-menu { background: transparent !important; padding: 10px 8px; }
+.app-sider .ant-menu { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; background: transparent !important; padding: 10px 8px; }
+.app-sider .ant-menu { scrollbar-width: thin; scrollbar-color: #486184 #0b1d3d; }
+.app-sider .ant-menu::-webkit-scrollbar { width: 8px; }
+.app-sider .ant-menu::-webkit-scrollbar-track { background: #0b1d3d; }
+.app-sider .ant-menu::-webkit-scrollbar-thumb { border: 2px solid #0b1d3d; border-radius: 999px; background: #486184; }
+.app-sider .ant-menu::-webkit-scrollbar-thumb:hover { background: #617b9f; }
 .app-sider .ant-menu-item, .app-sider .ant-menu-submenu-title { border-radius: 8px; margin-block: 3px; }
+.sider-collapse-button { flex: 0 0 48px; width: 100%; height: 48px; border-radius: 0; border-top: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.78) !important; background: rgba(0,0,0,.14); }
+.sider-collapse-button:hover { color: #fff !important; background: rgba(255,255,255,.08) !important; }
 .app-header { height: 64px; padding: 0 24px !important; background: rgba(255,255,255,.96) !important; border-bottom: 1px solid #e9edf5; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px); }
 .app-content { padding: 24px 28px 40px; background: #f3f6fb; }
 .page-header { min-height: 64px; margin-bottom: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
@@ -31,9 +40,67 @@ button, input, textarea, select { font: inherit; }
 .empty-compact { padding: 38px 0; text-align: center; color: #9aa6b6; font-size: 28px; }
 .empty-compact p { margin: 8px 0 0; font-size: 13px; }
 
+.user-management-page { display: flex; flex-direction: column; gap: 20px; }
+.user-filter-card .ant-card-body { padding: 24px 28px 8px; }
+.user-filter-card .ant-form-item { margin-bottom: 16px; }
+.user-filter-card .ant-form-item-label { flex: 0 0 auto; padding-right: 8px; }
+.user-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(155px, 1fr)) auto; gap: 0 18px; align-items: start; }
+.user-filter-actions { grid-column: 5; grid-row: 1; display: flex; justify-content: flex-end; padding-bottom: 16px; white-space: nowrap; }
+.user-list-card .ant-card-body { padding: 0 28px 24px; }
+.user-list-toolbar { min-height: 80px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.user-list-toolbar .ant-typography { margin: 0; }
+.user-list-toolbar .ant-typography-secondary { display: block; margin-top: 3px; font-size: 13px; }
+.user-list-card .ant-table-wrapper { border-top: 1px solid #eef1f6; }
+.role-management-page { display: flex; flex-direction: column; gap: 20px; }
+.role-filter-card .ant-card-body { padding: 24px 28px 8px; }
+.role-filter-card .ant-form-item { margin-bottom: 16px; }
+.role-filter-card .ant-form-item-label { flex: 0 0 auto; padding-right: 8px; }
+.role-filter-grid { display: grid; grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) minmax(250px, 1.2fr) auto; gap: 0 24px; align-items: start; }
+.role-filter-actions { grid-column: 4; grid-row: 1; display: flex; justify-content: flex-end; padding-bottom: 16px; white-space: nowrap; }
+.role-list-card .ant-card-body { padding: 0 28px 24px; }
+.role-list-toolbar { min-height: 80px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.role-list-toolbar .ant-typography { margin: 0; }
+.role-list-toolbar .ant-typography-secondary { display: block; margin-top: 3px; font-size: 13px; }
+.role-list-card .ant-table-wrapper { border-top: 1px solid #eef1f6; }
+.archive-page-actions { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+.archive-filter-card .ant-card-body { padding: 18px 24px; }
+.archive-filter-card b { color: #1f2937; white-space: nowrap; }
+.achievement-filter-card .ant-card-body { padding: 20px 24px 4px; }
+.achievement-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(190px, 1fr)) auto; gap: 0 20px; align-items: start; }
+.achievement-filter-grid.is-expanded { grid-template-columns: repeat(3, minmax(260px, 1fr)); }
+.achievement-filter-field { min-width: 0; width: 100%; }
+.achievement-filter-field > .ant-typography { flex: 0 0 auto; white-space: nowrap; }
+.achievement-filter-field > .ant-select, .achievement-filter-field > .ant-input { flex: 1; min-width: 0; width: auto !important; }
+.achievement-filter-actions { grid-column: 5; grid-row: 1; justify-self: end; padding-bottom: 16px; white-space: nowrap; }
+.achievement-filter-grid.is-expanded .achievement-filter-actions { grid-column: 1 / -1; grid-row: auto; justify-self: end; }
+
 .login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f3f6fa; }
 .login-card { width: min(420px, 100%); padding: 20px; border-radius: 16px; box-shadow: 0 18px 48px rgba(22,53,94,.13); }
 
+/* 课题配置详情页：统一三块内容的宽度和垂直节奏，避免左右卡片错位。 */
+.topic-indicator-editor { max-width: 1440px; margin: 0 auto; }
+.topic-indicator-editor > .ant-row { display: flex; flex-wrap: wrap; row-gap: 18px; margin-inline: -9px !important; align-items: stretch; }
+.topic-indicator-editor > .ant-row > .ant-col { padding-inline: 9px !important; }
+.topic-indicator-editor > .ant-row > .ant-col:nth-child(1) > .ant-card,
+.topic-indicator-editor > .ant-row > .ant-col:nth-child(2) > .ant-card { height: 100%; }
+.topic-indicator-editor > .ant-row > .ant-col > .ant-card { margin-bottom: 0; }
+.topic-indicator-editor .ant-card-head { min-height: 58px; padding-inline: 20px; }
+.topic-indicator-editor .ant-card-body { padding: 18px 20px; }
+.topic-indicator-editor .ant-form-item { margin-bottom: 10px; }
+.topic-indicator-editor .ant-table-wrapper { width: 100%; }
+.topic-indicator-editor .ant-table-thead > tr > th,
+.topic-indicator-editor .ant-table-tbody > tr > td { padding: 12px 14px; }
+.topic-indicator-editor .ant-table-thead > tr > th,
+.topic-indicator-editor .ant-table-tbody > tr > td { padding-block: 8px; }
+.topic-indicator-editor .ant-input-number { min-width: 104px; }
+
 @media (max-width: 1280px) {
   .app-content { padding-inline: 20px; }
+  .user-filter-grid { grid-template-columns: repeat(4, minmax(145px, 1fr)); }
+  .user-filter-actions { grid-column: 1 / -1; grid-row: auto; }
+  .role-filter-grid { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+  .role-filter-actions { grid-column: 1 / -1; grid-row: auto; }
+  .achievement-filter-grid { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+  .achievement-filter-actions { grid-column: 1 / -1; grid-row: auto; justify-self: end; }
+  .achievement-filter-grid.is-expanded { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
 }

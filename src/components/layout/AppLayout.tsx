@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Avatar, Button, Dropdown, Layout, Menu, Modal, Space, Tag, Typography, message } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   DashboardOutlined, FileDoneOutlined, FileTextOutlined,
   HomeOutlined, InboxOutlined, LogoutOutlined, SafetyCertificateOutlined,
-  SettingOutlined, TeamOutlined, UserOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined, TeamOutlined, UserOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store';
@@ -26,32 +26,15 @@ const menuTree: MenuNode[] = [
   { key: '/', label: <Link to="/">工作台</Link>, icon: <HomeOutlined />, page: 'home' },
   {
     key: 'indicator-group', label: '科研指标管理', icon: <DashboardOutlined />, children: [
-      { key: '/indicator', label: <Link to="/indicator">课题与指标配置</Link>, page: 'topic-indicator' },
-      { key: '/monitoring', label: <Link to="/monitoring">指标完成监控</Link>, page: 'indicator-monitoring' },
-      { key: '/warning-rules', label: <Link to="/warning-rules">预警规则配置</Link>, page: 'warning-rules' },
+      { key: '/indicator', label: <Link to="/indicator">科研指标配置</Link>, page: 'topic-indicator' },
     ],
   },
-  {
-    key: 'achievement-group', label: '成果管理', icon: <FileDoneOutlined />, children: [
-      { key: '/achievement-entry', label: <Link to="/achievement-entry">成果管理</Link>, page: 'achievement-entry' },
-      { key: '/achievement-approval', label: <Link to="/achievement-approval">成果审批</Link>, page: 'achievement-review' },
-      { key: '/achievement-query', label: <Link to="/achievement-query">成果查询</Link>, page: 'achievement-query' },
-    ],
-  },
-  {
-    key: 'report-group', label: '进度管理', icon: <FileTextOutlined />, children: [
-      { key: '/reports', label: <Link to="/reports">月季报提交</Link>, page: 'report-management' },
-      { key: '/report-approval', label: <Link to="/report-approval">月季报审批</Link>, page: 'report-review' },
-      { key: '/progress-overview', label: <Link to="/progress-overview">月季报进度</Link>, page: 'progress-overview' },
-    ],
-  },
+  { key: '/achievement-entry', label: <Link to="/achievement-entry">成果管理</Link>, icon: <FileDoneOutlined />, page: 'achievement-entry' },
+  { key: '/reports', label: <Link to="/reports">进度管理</Link>, icon: <FileTextOutlined />, page: 'report-management' },
   {
     key: 'archive-group', label: '归档材料', icon: <InboxOutlined />, children: [
-      { key: '/archive/catalog', label: <Link to="/archive/catalog">归档目录</Link>, page: 'project-public-archive' },
-      { key: '/archive/public', label: <Link to="/archive/public">重点项目公共材料</Link>, page: 'project-public-archive' },
       { key: '/archive/topics', label: <Link to="/archive/topics">课题国家材料</Link>, page: 'topic-archive' },
-      { key: '/archive/self-funded', label: <Link to="/archive/self-funded">配套自筹项目</Link>, page: 'self-funded-archive' },
-      { key: '/archive/approval', label: <Link to="/archive/approval">归档审批</Link>, page: 'archive-review' },
+      { key: '/archive/self-funded', label: <Link to="/archive/self-funded">配套自筹材料</Link>, page: 'self-funded-archive' },
       { key: '/archive/monitoring', label: <Link to="/archive/monitoring">归档进度监控</Link>, page: 'archive-monitoring' },
     ],
   },
@@ -75,6 +58,7 @@ function visibleMenu(nodes: MenuNode[], user: User, roles: RbacRole[]): MenuNode
 
 export function AppLayout() {
   const { currentUser, project, roles, resetToMock, logout } = useAppStore();
+  const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   if (!currentUser) return null;
@@ -88,12 +72,19 @@ export function AppLayout() {
 
   return (
     <Layout className="app-shell">
-      <Sider width={244} theme="dark" className="app-sider">
-        <div className="brand-block">
+      <Sider width={244} collapsedWidth={72} collapsed={collapsed} trigger={null} theme="dark" className="app-sider">
+        <div className={`brand-block${collapsed ? ' is-collapsed' : ''}`}>
           <div className="brand-mark"><SafetyCertificateOutlined /></div>
-          <div><div className="brand-title">GZXM 科研管理</div><div className="brand-subtitle">重点项目协同工作台</div></div>
+          {!collapsed && <div><div className="brand-title">GZXM 科研管理</div><div className="brand-subtitle">重点项目协同工作台</div></div>}
         </div>
         <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['indicator-group', 'achievement-group', 'archive-group', 'admin-group']} items={visibleMenu(menuTree, currentUser, roles) as MenuProps['items']} />
+        <Button
+          type="text"
+          className="sider-collapse-button"
+          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+          onClick={() => setCollapsed((value) => !value)}
+        />
       </Sider>
       <Layout>
         <Header className="app-header">

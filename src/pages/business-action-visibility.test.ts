@@ -39,7 +39,7 @@ describe('business action visibility', () => {
     useAppStore.setState(createInitialState());
   });
 
-  it('keeps the achievement submission page read-only for the system administrator', () => {
+  it('keeps the unified achievement page read-only for the system administrator', () => {
     const state = createInitialState();
     const administrator = state.users.find((user) => user.role === '系统管理员');
     useAppStore.setState({ ...state, currentUser: administrator });
@@ -47,18 +47,19 @@ describe('business action visibility', () => {
     render(React.createElement(AchievementEntryPage));
 
     expect(screen.queryByText('新增成果')).toBeNull();
-    expect(screen.getByText(/只读查看/)).toBeTruthy();
+    expect(screen.getByText('成果进度')).toBeTruthy();
+    expect(screen.getByText(/成果列表/)).toBeTruthy();
   });
 
-  it('shows every topic report without submission actions to the system administrator', () => {
+  it('shows the unified report progress without submission actions to the system administrator', () => {
     const state = createInitialState();
     const administrator = state.users.find((user) => user.role === '系统管理员');
     useAppStore.setState({ ...state, currentUser: administrator });
 
     render(React.createElement(ReportManagementPage));
 
-    expect(screen.getAllByText('课题1：总体架构与关键技术研究').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('只读查看').length).toBeGreaterThan(0);
+    expect(screen.getByText('月季报进度')).toBeTruthy();
+    expect(screen.queryByText('新建月季报')).toBeNull();
     expect(screen.queryByText('提交初审')).toBeNull();
   });
 });

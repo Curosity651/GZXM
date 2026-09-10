@@ -7,14 +7,14 @@ import type { ArchiveRequirement, ArchiveSubmission, User } from '../types';
 
 describe('角色权限与课题数据范围', () => {
   it('系统管理员可以查看业务页面但默认不能执行业务审批', () => {
-    expect(canViewPage('系统管理员', 'achievement-query')).toBe(true);
+    expect(canViewPage('系统管理员', 'achievement-entry')).toBe(true);
     expect(canPerform('系统管理员', 'achievement.final.approve')).toBe(false);
   });
 
   it('课题牵头单位只能取得绑定课题的数据', () => {
     const user = {
       id: 'topic-user', username: 'topic01', password: 'topic123', name: '课题一账号',
-      role: '课题牵头单位', topicId: 't1', enabled: true, createdAt: '2026-01-01',
+      role: '外部课题单位', topicId: 't1', enabled: true, createdAt: '2026-01-01',
     } as User;
     const records = [{ id: 'a', topicId: 't1' }, { id: 'b', topicId: 't2' }];
 

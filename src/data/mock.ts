@@ -206,11 +206,13 @@ export const MOCK_WORKFLOW_ACHIEVEMENTS: Achievement[] = [
 ];
 
 export const MOCK_INDICATOR_DEFINITIONS: IndicatorDefinition[] = [
-  ['paper', 'PAPER', '学术论文'], ['patent', 'PATENT', '发明专利'], ['copyright', 'COPYRIGHT', '软件著作权'],
-  ['standard', 'STANDARD', '标准规范'], ['talent', 'TALENT', '人才培养'],
-].map(([id, code, name]) => ({
-  id: `indicator-${id}`, code, name, achievementType: name as IndicatorDefinition['achievementType'],
-  unit: name === '人才培养' ? '人' : name === '学术论文' ? '篇' : '项', builtIn: true, enabled: true,
+  ['power-grid-first-author', 'POWER_GRID_FIRST_AUTHOR', '第一作者是广西电网的数量', '学术论文'],
+  ['chinese-core-journal', 'CHINESE_CORE_JOURNAL', '中文核心期刊的数量', '学术论文'],
+  ['paper', 'PAPER', '学术论文', '学术论文'], ['patent', 'PATENT', '发明专利', '发明专利'], ['copyright', 'COPYRIGHT', '软件著作权', '软件著作权'],
+  ['standard', 'STANDARD', '标准规范', '标准规范'], ['talent', 'TALENT', '人才培养', '人才培养'],
+].map(([id, code, name, achievementType]) => ({
+  id: `indicator-${id}`, code, name, achievementType: achievementType as IndicatorDefinition['achievementType'],
+  unit: name === '人才培养' ? '人' : (name === '学术论文' || name === '第一作者是广西电网的数量' || name === '中文核心期刊的数量') ? '篇' : '项', builtIn: true, enabled: true,
   createdAt: '2025-01-01', updatedAt: '2025-01-01',
 }));
 
@@ -221,7 +223,7 @@ export const MOCK_TOPIC_MEMBERSHIPS: TopicUnitMembership[] = MOCK_TOPICS.flatMap
 
 export const MOCK_TOPIC_INDICATORS: TopicIndicator[] = MOCK_TOPICS.flatMap((topic) =>
   Object.entries(topic.topicOverallRequirements).filter(([, quantity]) => quantity > 0).map(([type, quantity]) => {
-    const definition = MOCK_INDICATOR_DEFINITIONS.find((item) => item.achievementType === type)!;
+    const definition = MOCK_INDICATOR_DEFINITIONS.find((item) => item.name === type) ?? MOCK_INDICATOR_DEFINITIONS.find((item) => item.achievementType === type)!;
     return { id: `topic-indicator-${topic.id}-${definition.id}-node-5`, projectId: 'p1', topicId: topic.id,
       indicatorDefinitionId: definition.id, achievementType: definition.achievementType, nodeId: 'node-5', targetQuantity: quantity,
       status: '已下发' as const, version: 1, publishedAt: '2025-01-01', publishedBy: '科研助理（董）', createdAt: '2025-01-01', updatedAt: '2025-01-01' };
@@ -242,22 +244,23 @@ export const MOCK_UNIT_INDICATOR_ALLOCATIONS: UnitIndicatorAllocation[] = MOCK_T
 
 export const MOCK_ROLES: RbacRole[] = [
   { id: 'role-system-admin', code: 'system-admin', name: '系统管理员', description: '查看全部页面，负责账号、权限、字典和系统配置，默认不参与业务审批', pagePermissions: ALL_PAGE_PERMISSIONS, actionPermissions: ['system.manage'], enabled: true, builtIn: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  { id: 'role-project-leader', code: 'project-leader', name: '项目技术负责人', description: '业务终审与全局进度查看', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'achievement-entry', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['achievement.final.approve', 'report.final.approve', 'archive.final.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  { id: 'role-research-assistant', code: 'research-assistant', name: '科研助理', description: '指标配置、业务初审与项目公共材料归档', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'warning-rules', 'achievement-entry', 'achievement-review', 'achievement-query', 'report-review', 'progress-overview', 'project-public-archive', 'topic-archive', 'self-funded-archive', 'archive-review', 'archive-monitoring'], actionPermissions: ['topic.manage', 'indicator.manage', 'indicator.catalog.manage', 'topic-indicator.publish', 'warning.manage', 'achievement.initial.approve', 'report.initial.approve', 'report.rule.manage', 'archive.public.submit', 'archive.initial.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  { id: 'role-topic-unit', code: 'topic-unit', name: '课题牵头单位', description: '课题成员与单位指标管理、成果及材料填报', pagePermissions: ['home', 'topic-indicator', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'report-management', 'progress-overview', 'topic-archive', 'self-funded-archive', 'archive-monitoring'], actionPermissions: ['topic-unit.manage', 'unit-allocation.manage', 'unit-allocation.publish', 'achievement.submit', 'report.submit', 'archive.topic.submit', 'self-funded.manage'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
-  { id: 'role-topic-participant', code: 'topic-participant', name: '课题承担单位', description: '承担单位成果与课题材料填报', pagePermissions: ['home', 'indicator-monitoring', 'achievement-entry', 'achievement-query', 'topic-archive', 'archive-monitoring'], actionPermissions: ['achievement.submit', 'archive.topic.submit'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-project-leader', code: 'project-leader', name: '项目技术负责人', description: '业务终审与归档进度查看', pagePermissions: ['home', 'topic-indicator', 'achievement-entry', 'report-management', 'topic-archive', 'self-funded-archive', 'archive-monitoring'], actionPermissions: ['achievement.final.approve', 'report.final.approve'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-research-assistant', code: 'research-assistant', name: '科研助理', description: '课题配置、课题指标下发、业务初审及归档进度查看', pagePermissions: ['home', 'topic-indicator', 'achievement-entry', 'report-management', 'topic-archive', 'self-funded-archive', 'archive-monitoring'], actionPermissions: ['topic.manage', 'indicator.manage', 'topic-indicator.publish', 'achievement.initial.approve', 'report.initial.approve', 'report.rule.manage'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-internal-topic-unit', code: 'internal-topic-unit', name: '内部课题单位', description: '内部单位账号；课题职责由牵头/承担关系决定，可维护本单位配套自筹项目', pagePermissions: ['home', 'topic-indicator', 'achievement-entry', 'report-management', 'topic-archive', 'self-funded-archive'], actionPermissions: ['topic-unit.manage', 'unit-allocation.manage', 'unit-allocation.publish', 'achievement.submit', 'report.submit', 'archive.topic.submit', 'self-funded.manage'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
+  { id: 'role-external-topic-unit', code: 'external-topic-unit', name: '外部课题单位', description: '高校、科研院所等外部单位账号；课题职责由牵头/承担关系决定', pagePermissions: ['home', 'topic-indicator', 'achievement-entry', 'report-management', 'topic-archive'], actionPermissions: ['topic-unit.manage', 'unit-allocation.manage', 'unit-allocation.publish', 'achievement.submit', 'report.submit', 'archive.topic.submit'], enabled: true, builtIn: false, createdAt: '2025-01-01', updatedAt: '2025-01-01' },
 ];
 
 export const MOCK_USERS: User[] = [
   { id: 'user-admin', username: 'admin', password: 'admin123', name: '系统管理员', unitId: 'u-sgcc', phone: '13800000001', email: 'admin@sgcc.com.cn', role: '系统管理员', roleId: 'role-system-admin', dataScope: 'ALL', topicIds: [], enabled: true, createdAt: '2025-01-01', lastLoginAt: '2025-06-01' },
   { id: 'user-leader', username: 'leader', password: 'leader123', name: '项目技术负责人', unitId: 'u-sgcc', phone: '13800000002', email: 'leader@sgcc.com.cn', role: '项目技术负责人', roleId: 'role-project-leader', dataScope: 'ALL', topicIds: [], enabled: true, createdAt: '2025-01-01' },
   { id: 'user-assistant', username: 'assistant', password: 'assistant123', name: '科研助理（董）', unitId: 'u-sgcc', phone: '13800000003', email: 'assistant@sgcc.com.cn', role: '科研助理', roleId: 'role-research-assistant', dataScope: 'ALL', topicIds: [], enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-1', username: 'topic01', password: 'topic123', name: '课题一牵头单位', unitId: 'u-tsinghua', topicId: 't1', topicIds: ['t1'], dataScope: 'TOPICS', phone: '13800000101', email: 'topic01@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-2', username: 'topic02', password: 'topic123', name: '课题二牵头单位', unitId: 'u-pku', topicId: 't2', topicIds: ['t2'], dataScope: 'TOPICS', phone: '13800000102', email: 'topic02@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-3', username: 'topic03', password: 'topic123', name: '课题三牵头单位', unitId: 'u-ict', topicId: 't3', topicIds: ['t3'], dataScope: 'TOPICS', phone: '13800000103', email: 'topic03@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-4', username: 'topic04', password: 'topic123', name: '课题四牵头单位', unitId: 'u-sgcc', topicId: 't4', topicIds: ['t4'], dataScope: 'TOPICS', phone: '13800000104', email: 'topic04@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-topic-5', username: 'topic05', password: 'topic123', name: '课题五牵头单位', unitId: 'u-hust', topicId: 't5', topicIds: ['t5'], dataScope: 'TOPICS', phone: '13800000105', email: 'topic05@mock.local', role: '课题牵头单位', roleId: 'role-topic-unit', enabled: true, createdAt: '2025-01-01' },
-  { id: 'user-participant-pku', username: 'unit01', password: 'unit123', name: '北京大学承担单位账号', unitId: 'u-pku', topicIds: ['t1', 't5'], dataScope: 'TOPICS', phone: '13800000201', email: 'unit01@mock.local', role: '课题承担单位', roleId: 'role-topic-participant', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-tsinghua', username: 'tsinghua', password: 'unit123', name: '清华大学', unitId: 'u-tsinghua', topicIds: ['t1', 't2', 't4'], dataScope: 'TOPICS', phone: '13800000101', email: 'tsinghua@mock.local', role: '外部课题单位', roleId: 'role-external-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-pku', username: 'pku', password: 'unit123', name: '北京大学', unitId: 'u-pku', topicIds: ['t1', 't2', 't5'], dataScope: 'TOPICS', phone: '13800000102', email: 'pku@mock.local', role: '外部课题单位', roleId: 'role-external-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-ict', username: 'ict', password: 'unit123', name: '中科院计算所', unitId: 'u-ict', topicIds: ['t1', 't3', 't5'], dataScope: 'TOPICS', phone: '13800000103', email: 'ict@mock.local', role: '外部课题单位', roleId: 'role-external-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-zju', username: 'zju', password: 'unit123', name: '浙江大学', unitId: 'u-zju', topicIds: ['t2', 't3'], dataScope: 'TOPICS', phone: '13800000104', email: 'zju@mock.local', role: '外部课题单位', roleId: 'role-external-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-hust', username: 'hust', password: 'unit123', name: '华中科技大学', unitId: 'u-hust', topicIds: ['t3', 't4', 't5'], dataScope: 'TOPICS', phone: '13800000105', email: 'hust@mock.local', role: '外部课题单位', roleId: 'role-external-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-gxgrid', username: 'gxgrid', password: 'unit123', name: '广西电网公司', unitId: 'u-sgcc', topicIds: ['t3', 't4'], dataScope: 'TOPICS', phone: '13800000201', email: 'gxgrid@mock.local', role: '内部课题单位', roleId: 'role-internal-topic-unit', enabled: true, createdAt: '2025-01-01' },
+  { id: 'user-nari', username: 'nari', password: 'unit123', name: '南瑞集团', unitId: 'u-nari', topicIds: ['t4'], dataScope: 'TOPICS', phone: '13800000202', email: 'nari@mock.local', role: '内部课题单位', roleId: 'role-internal-topic-unit', enabled: true, createdAt: '2025-01-01' },
 ];
 
 export const MOCK_ARCHIVE_CATEGORIES: ArchiveCategory[] = [
@@ -320,13 +323,13 @@ export const MOCK_REPORTS: ProgressReport[] = [
 ];
 
 export const MOCK_SELF_FUNDED_PROJECTS: SelfFundedProject[] = [
-  { id: 'sf-1', topicId: 't1', code: 'ZC-KJ-001', name: '智能调度验证平台研发', projectType: '科技项目', principalName: '李工', implementingUnit: '广西电网有限责任公司', startDate: '2025-03-01', endDate: '2027-12-31', budget: 320, status: '实施中', templateSnapshotId: 'tpl-tech-v1' },
-  { id: 'sf-2', topicId: 't1', code: 'ZC-JG-001', name: '示范站技术改造', projectType: '技改项目', principalName: '陈工', implementingUnit: '南宁供电局', startDate: '2026-01-01', endDate: '2027-06-30', budget: 180, status: '实施中', templateSnapshotId: 'tpl-renovation-v1' },
-  { id: 'sf-3', topicId: 't2', code: 'ZC-JJ-001', name: '试验环境基础设施建设', projectType: '基建项目', principalName: '周工', implementingUnit: '广西电网有限责任公司', startDate: '2025-08-01', endDate: '2026-12-31', budget: 450, status: '验收中', templateSnapshotId: 'tpl-infrastructure-v1' },
+  { id: 'sf-1', topicId: 't3', ownerUnitId: 'u-sgcc', code: 'ZC-KJ-001', name: '智能调度验证平台研发', projectType: '科技项目', principalName: '李工', implementingUnit: '国家电网公司', startDate: '2025-03-01', endDate: '2027-12-31', budget: 320, status: '实施中', templateSnapshotId: 'tpl-tech-v1' },
+  { id: 'sf-2', topicId: 't4', ownerUnitId: 'u-nari', code: 'ZC-JG-001', name: '示范站技术改造', projectType: '技改项目', principalName: '陈工', implementingUnit: '南瑞集团', startDate: '2026-01-01', endDate: '2027-06-30', budget: 180, status: '实施中', templateSnapshotId: 'tpl-renovation-v1' },
+  { id: 'sf-3', topicId: 't4', ownerUnitId: 'u-sgcc', code: 'ZC-JJ-001', name: '试验环境基础设施建设', projectType: '基建项目', principalName: '周工', implementingUnit: '国家电网公司', startDate: '2025-08-01', endDate: '2026-12-31', budget: 450, status: '验收中', templateSnapshotId: 'tpl-infrastructure-v1' },
 ];
 
 export const MOCK_ARCHIVE_SUBMISSIONS: ArchiveSubmission[] = [
-  { id: 'as-public-1', requirementId: 'ar-public-1', ownerType: 'PROJECT_PUBLIC', ownerId: 'p1', applicability: 'APPLICABLE', status: '已通过', fileIds: ['file-project-application'], version: 1, submittedAt: '2026-01-05', updatedAt: '2026-01-06' },
-  { id: 'as-topic-1', requirementId: 'ar-topic-4', ownerType: 'TOPIC_NATIONAL', ownerId: 't1', topicId: 't1', applicability: 'APPLICABLE', status: '初审中', fileIds: ['file-ip-proof'], version: 1, submittedAt: '2026-09-02', updatedAt: '2026-09-02' },
-  { id: 'as-self-1', requirementId: 'ar-tech-1', ownerType: 'SELF_FUNDED', ownerId: 'sf-1', topicId: 't1', applicability: 'APPLICABLE', status: '终审中', fileIds: ['file-initiation'], version: 1, submittedAt: '2026-08-28', updatedAt: '2026-09-03' },
+  { id: 'as-public-1', requirementId: 'ar-public-1', ownerType: 'PROJECT_PUBLIC', ownerId: 'p1', applicability: 'APPLICABLE', status: '已归档', fileIds: ['file-project-application'], version: 1, submittedAt: '2026-01-05', updatedAt: '2026-01-06' },
+  { id: 'as-topic-1', requirementId: 'ar-topic-4', ownerType: 'TOPIC_NATIONAL', ownerId: 't1:u-tsinghua', topicId: 't1', unitId: 'u-tsinghua', applicability: 'APPLICABLE', status: '已归档', fileIds: ['file-ip-proof'], version: 1, submittedAt: '2026-09-02', updatedAt: '2026-09-02' },
+  { id: 'as-self-1', requirementId: 'ar-tech-1', ownerType: 'SELF_FUNDED', ownerId: 'sf-1', topicId: 't3', unitId: 'u-sgcc', applicability: 'APPLICABLE', status: '已归档', fileIds: ['file-initiation'], version: 1, submittedAt: '2026-08-28', updatedAt: '2026-09-03' },
 ];

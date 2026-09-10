@@ -4,8 +4,8 @@ import { createAppStore, createInitialState, visibleTopics } from './index';
 describe('Mock 数据范围', () => {
   it('为每个课题建立独立账号并只返回绑定课题', () => {
     const state = createInitialState();
-    const user = state.users.find((item) => item.username === 'topic01');
-    expect(user?.role).toBe('课题牵头单位');
+    const user = state.users.find((item) => item.username === 'tsinghua');
+    expect(user?.role).toBe('外部课题单位');
     expect(visibleTopics(user!, state.topics).map((topic) => topic.id)).toEqual(['t1']);
   });
 

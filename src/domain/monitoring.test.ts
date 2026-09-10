@@ -24,7 +24,7 @@ describe('课题指标监控', () => {
   });
 
   it('课题账号只能取得自身课题汇总', () => {
-    const user = { role: '课题牵头单位', topicId: 't2' } as User;
+    const user = { role: '外部课题单位', topicId: 't2' } as User;
     const result = buildTopicSummaries(topics, indicators, achievements, user);
     expect(result.map((item) => item.topicId)).toEqual(['t2']);
   });

@@ -1,6 +1,8 @@
 import type { Achievement, Topic, TopicUnitMembership, User } from '../types';
 
-const isGlobalUser = (user: User) => ['系统管理员', '项目技术负责人', '科研助理'].includes(user.role);
+export const isGlobalUser = (user: User) => ['系统管理员', '项目技术负责人', '科研助理'].includes(user.role);
+export const isTopicUnitUser = (user: User) => ['内部课题单位', '外部课题单位'].includes(user.role);
+export const isInternalTopicUnit = (user: User) => user.role === '内部课题单位';
 
 export function membershipsForUser(user: User, memberships: TopicUnitMembership[]): TopicUnitMembership[] {
   if (!user.unitId) return [];
@@ -17,6 +19,15 @@ export function membershipForUser(user: User, topicId: string, memberships: Topi
   return membershipsForUser(user, memberships).find((item) => item.topicId === topicId);
 }
 
+export function canAccessTopicByMembership(user: User, topicId: string | undefined, memberships: TopicUnitMembership[]): boolean {
+  if (!topicId) return isGlobalUser(user);
+  return isGlobalUser(user) || Boolean(membershipForUser(user, topicId, memberships));
+}
+
+export function canViewAllTopicUnitData(user: User, topicId: string, memberships: TopicUnitMembership[]): boolean {
+  return isGlobalUser(user) || isTopicLead(user, topicId, memberships);
+}
+
 export function isTopicLead(user: User, topicId: string, memberships: TopicUnitMembership[]): boolean {
   return membershipForUser(user, topicId, memberships)?.membershipType === 'LEAD';
 }
@@ -31,4 +42,3 @@ export function canViewAchievement(user: User, achievement: Achievement, members
   if (isTopicLead(user, achievement.topicId, memberships)) return true;
   return achievement.uploadUnitId === user.unitId || achievement.unitId === user.unitId;
 }
-

@@ -27,7 +27,7 @@ describe('报告两级审批', () => {
       fundUsage: '按计划执行', nextPlan: '继续联调', problemsAndMeasures: '无', status: '草稿',
       overdue: false, version: 1, updatedAt: '2026-09-09',
     });
-    store.getState().submitReport('report-new', 'user-topic-1');
+    store.getState().submitReport('report-new', 'user-tsinghua');
     expect(store.getState().reports.find((item) => item.id === 'report-new')?.status).toBe('初审中');
   });
 

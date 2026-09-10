@@ -14,11 +14,13 @@ export interface ProjectUnit {
 export interface Topic {
   id: string; projectId: string; code: string; name: string;
   leadingUnitId: string; participatingUnitIds: string[];
+  enabled?: boolean;
   startDate?: string; endDate?: string; summary?: string;
   status?: '草稿' | '实施中' | '已暂停' | '已结题';
   principalName?: string;
   contactName?: string; contactPhone?: string; contactEmail?: string;
   financeAssistant?: string; financeAssistantEmail?: string; financeAssistantPhone?: string;
+  reportConfig?: TopicReportConfig;
   domesticJournalRequiredCount: number;
   topicOverallRequirements: Record<string, number>;
   remarks?: string;
@@ -111,6 +113,7 @@ export interface AchievementMaterial {
   id: string; achievementId: string; materialType: string; name: string;
   fileId: string; fileName: string; fileUrl: string; version: number;
   status: MaterialStatus; uploadedAt?: string; reviewedAt?: string; reviewOpinion?: string;
+  materialDate?: string; remarks?: string; uploader?: string;
 }
 
 // 成果
@@ -243,7 +246,7 @@ export interface ArchiveRequirement {
 }
 
 export type ArchiveApplicability = 'PENDING' | 'APPLICABLE' | 'NOT_APPLICABLE';
-export type ArchiveWorkflowStatus = '未提交' | '草稿' | '初审中' | '终审中' | '已通过' | '退回修改';
+export type ArchiveWorkflowStatus = '未提交' | '草稿' | '初审中' | '终审中' | '已通过' | '已归档' | '退回修改';
 
 export interface ArchiveSubmission {
   id: string;
@@ -251,6 +254,7 @@ export interface ArchiveSubmission {
   ownerType: 'PROJECT_PUBLIC' | 'TOPIC_NATIONAL' | 'SELF_FUNDED';
   ownerId: string;
   topicId?: string;
+  unitId?: string;
   applicability: ArchiveApplicability;
   nonApplicableReason?: string;
   status: ArchiveWorkflowStatus;
@@ -280,20 +284,20 @@ export interface ApprovalValidation {
 
 // 用户与认证
 export type UserRole =
-  | '系统管理员' | '项目技术负责人' | '科研助理' | '课题牵头单位' | '课题承担单位';
+  | '系统管理员' | '项目技术负责人' | '科研助理' | '内部课题单位' | '外部课题单位';
 
 export type DataScope = 'ALL' | 'TOPICS';
 
 export type PagePermissionKey =
   | 'home' | 'topic-indicator' | 'indicator-monitoring' | 'warning-rules'
-  | 'achievement-entry' | 'achievement-review' | 'achievement-query'
-  | 'report-management' | 'report-review' | 'progress-overview'
+  | 'achievement-entry'
+  | 'report-management'
   | 'project-public-archive' | 'topic-archive' | 'self-funded-archive'
   | 'archive-review' | 'archive-monitoring'
   | 'user-management' | 'role-permission' | 'dictionary' | 'system-config';
 
 export type ActionPermissionKey =
-  | 'topic.manage' | 'indicator.manage' | 'indicator.catalog.manage' | 'topic-indicator.publish'
+  | 'topic.manage' | 'indicator.manage' | 'topic-indicator.publish'
   | 'topic-unit.manage' | 'unit-allocation.manage' | 'unit-allocation.publish' | 'warning.manage'
   | 'achievement.submit' | 'achievement.initial.approve' | 'achievement.final.approve'
   | 'report.submit' | 'report.initial.approve' | 'report.final.approve' | 'report.rule.manage'
@@ -387,6 +391,7 @@ export type SelfFundedProjectType = '科技项目' | '技改项目' | '基建项
 export interface SelfFundedProject {
   id: string;
   topicId: string;
+  ownerUnitId: string;
   code: string;
   name: string;
   projectType: SelfFundedProjectType;
@@ -398,6 +403,13 @@ export interface SelfFundedProject {
   status: '筹备中' | '实施中' | '验收中' | '已完成';
   templateSnapshotId: string;
   remarks?: string;
+}
+
+export interface TopicReportConfig {
+  effectiveYear: number;
+  monthlyEnabled: boolean; monthlyOpenDay: number; monthlyDeadlineDay: number;
+  quarterlyEnabled: boolean; quarterlyOpenDay: number; quarterlyDeadlineDay: number;
+  quarterlyMonths: number[];
 }
 
 export interface AuthState {

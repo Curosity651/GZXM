@@ -4,7 +4,7 @@ import { createAppStore } from '../store';
 
 describe('账号课题绑定', () => {
   it('课题牵头单位必须保留课题绑定，其他角色清除课题绑定', () => {
-    expect(normalizeTopicBinding('课题牵头单位', 't1')).toBe('t1');
+    expect(normalizeTopicBinding('外部课题单位', 't1')).toBeUndefined();
     expect(normalizeTopicBinding('科研助理', 't1')).toBeUndefined();
   });
 

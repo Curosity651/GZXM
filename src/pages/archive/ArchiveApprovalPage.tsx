@@ -26,7 +26,7 @@ export function ArchiveApprovalPage() {
     state.reviewArchive(detail.id, decision === 'approve' ? action : 'RETURN', state.currentUser!.id, opinion || '同意归档');
     message.success(decision === 'approve' ? '归档审批已通过' : '已退回修改'); setDecision(null); setDetail(null); setOpinion('');
   };
-  const ownerLabel = (item: ArchiveSubmission) => item.ownerType === 'PROJECT_PUBLIC' ? state.project.name : item.ownerType === 'TOPIC_NATIONAL' ? state.topics.find((topic) => topic.id === item.ownerId)?.name : state.selfFundedProjects.find((project) => project.id === item.ownerId)?.name;
+  const ownerLabel = (item: ArchiveSubmission) => item.ownerType === 'PROJECT_PUBLIC' ? state.project.name : item.ownerType === 'TOPIC_NATIONAL' ? `${state.topics.find((topic) => topic.id === item.topicId)?.name ?? item.topicId} · ${state.units.find((unit) => unit.id === item.unitId)?.name ?? item.unitId}` : state.selfFundedProjects.find((project) => project.id === item.ownerId)?.name;
   return <>
     <PageHeader title="归档审批" description="课题材料和自筹项目材料执行两级审批；项目公共材料由科研助理提交后直接终审。" />
     {!canInitial && !canFinal && <Alert type="info" showIcon message="当前角色可查看审批记录，但没有审批操作权限。" style={{ marginBottom: 16 }} />}

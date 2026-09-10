@@ -16,7 +16,7 @@ export function archiveCompletion(
     return submissionByRequirement.get(requirement.id)?.applicability === 'APPLICABLE';
   });
   const completed = applicableRequirements.filter(
-    (requirement) => submissionByRequirement.get(requirement.id)?.status === '已通过',
+    (requirement) => ['已通过', '已归档'].includes(submissionByRequirement.get(requirement.id)?.status ?? ''),
   ).length;
   const required = applicableRequirements.length;
   return {

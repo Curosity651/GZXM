@@ -1,5 +1,5 @@
 import { Card, Col, Form, Input, Row, Select } from 'antd';
-import { ACHIEVEMENT_TYPES, type Achievement } from '../../types';
+import { type Achievement, type IndicatorDefinition } from '../../types';
 import { PaperFields } from './PaperFields';
 import { PatentFields } from './PatentFields';
 import { CopyrightFields } from './CopyrightFields';
@@ -23,9 +23,10 @@ interface AchievementFormProps {
   units: UnitInfo[];
   achievement?: Achievement;
   lockOwnership?: boolean;
+  definitions?: IndicatorDefinition[];
 }
 
-export function AchievementForm({ form, topics, units, lockOwnership = false }: AchievementFormProps) {
+export function AchievementForm({ form, topics, units, lockOwnership = false, definitions = [] }: AchievementFormProps) {
   const achievementType = Form.useWatch('achievementType', form);
   const topicId = Form.useWatch('topicId', form);
   const topic = topics.find((t) => t.id === topicId);
@@ -61,13 +62,10 @@ export function AchievementForm({ form, topics, units, lockOwnership = false }: 
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item label="成果类型" name="achievementType" rules={[{ required: true, message: '请选择成果类型' }]}>
-              <Select placeholder="选择成果类型" disabled={lockOwnership}>
-                {ACHIEVEMENT_TYPES.map((t) => (
-                  <Option key={t} value={t}>{t}</Option>
-                ))}
-              </Select>
+            <Form.Item label="对应成果指标" name="indicatorDefinitionId" rules={[{ required: true, message: '请选择成果指标' }]}>
+              <Select placeholder="选择已分配的成果指标" disabled={lockOwnership} onChange={(id) => form.setFieldValue('achievementType', definitions.find((item) => item.id === id)?.achievementType)} options={definitions.filter((item) => item.enabled).map((item) => ({ label: item.name, value: item.id }))} />
             </Form.Item>
+            <Form.Item name="achievementType" hidden><Input /></Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item label="成果名称/题目" name="title" rules={[{ required: true, message: '请输入成果名称' }]}>
@@ -88,7 +86,7 @@ export function AchievementForm({ form, topics, units, lockOwnership = false }: 
       </Card>
 
       {achievementType && (
-        <Card title={`${achievementType} 详细信息`} size="small" style={{ marginBottom: 16 }}>
+        <Card title={achievementType === '学术论文' ? '论文信息与作者' : achievementType === '发明专利' ? '提案信息、发明人与申请人' : achievementType === '软件著作权' ? '软件信息、著作权人与技术特点' : `${achievementType}详细信息`} size="small" style={{ marginBottom: 16 }}>
           {achievementType === '学术论文' && <PaperFields />}
           {achievementType === '发明专利' && <PatentFields />}
           {achievementType === '软件著作权' && <CopyrightFields />}

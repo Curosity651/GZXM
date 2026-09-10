@@ -1,22 +1,25 @@
-import { Alert, Card, Select, Space } from 'antd';
-import { useState } from 'react';
+import { Card, Select, Space, Tag } from 'antd';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store';
-import { canAccessTopic, canPerform, filterByTopicScope } from '../../domain/permissions';
-import { PageHeader } from '../../components/common/PageHeader';
+import { canPerform } from '../../domain/permissions';
+import { accessibleTopics, canViewAllTopicUnitData } from '../../domain/topic-access';
 import { RequirementChecklist } from '../../components/archive/RequirementChecklist';
 
 export function TopicArchivePage() {
   const state = useAppStore();
   const user = state.currentUser!;
-  const availableTopics = filterByTopicScope(user, state.topics);
+  const availableTopics = accessibleTopics(user, state.topics, state.topicMemberships);
   const [topicId, setTopicId] = useState(availableTopics[0]?.id);
+  const members = state.topicMemberships.filter((item) => item.topicId === topicId && item.enabled);
+  const visibleMembers = useMemo(() => canViewAllTopicUnitData(user, topicId ?? '', state.topicMemberships) ? members : members.filter((item) => item.unitId === user.unitId), [members, state.topicMemberships, topicId, user]);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>();
+  const unitId = visibleMembers.some((item) => item.unitId === selectedUnitId) ? selectedUnitId : visibleMembers[0]?.unitId;
   const requirements = state.archiveRequirements.filter((item) => item.ownerType === 'TOPIC_NATIONAL');
-  const editable = canPerform(user, state.roles, 'archive.topic.submit') && canAccessTopic(user, topicId);
+  const editable = canPerform(user, state.roles, 'archive.topic.submit') && unitId === user.unitId;
+  const selectedMembership = visibleMembers.find((item) => item.unitId === unitId);
   return <>
-    <PageHeader title="课题国家材料" description="每个课题独立生成国家归档任务，由课题牵头单位统一收集并提交。" />
-    <Alert type="warning" showIcon message="课题参与单位不设置账号，其材料由课题牵头单位统一提交；终审通过后才计入完成率。" style={{ marginBottom: 16 }} />
-    <Card title={<Space>查看课题<Select value={topicId} onChange={setTopicId} style={{ width: 360 }} options={availableTopics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Space>}>
-      {topicId && <RequirementChecklist requirements={requirements} ownerType="TOPIC_NATIONAL" ownerId={topicId} topicId={topicId} editable={editable} />}
+    <Card title={<Space wrap>课题<Select value={topicId} onChange={(value) => { setTopicId(value); setSelectedUnitId(undefined); }} style={{ width: 360 }} options={availableTopics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} />提交单位<Select value={unitId} onChange={setSelectedUnitId} style={{ width: 260 }} options={visibleMembers.map((member) => ({ label: state.units.find((item) => item.id === member.unitId)?.name ?? member.unitId, value: member.unitId }))} />{selectedMembership && <Tag color={selectedMembership.membershipType === 'LEAD' ? 'blue' : 'cyan'}>{selectedMembership.membershipType === 'LEAD' ? '牵头单位' : '承担单位'}</Tag>}</Space>}>
+      {topicId && unitId && <RequirementChecklist requirements={requirements} ownerType="TOPIC_NATIONAL" ownerId={`${topicId}:${unitId}`} topicId={topicId} unitId={unitId} editable={editable} />}
     </Card>
   </>;
 }

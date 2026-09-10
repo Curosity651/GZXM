@@ -19,9 +19,9 @@ import {
 import { nextAchievementStatus, type AchievementAction } from '../domain/workflows';
 import { nextReportStatus, type ReportAction } from '../domain/report-flow';
 import { nextArchiveStatus, type ArchiveAction } from '../domain/archive-flow';
-import { canAccessTopic, canPerform, filterByTopicScope, getRole } from '../domain/permissions';
+import { canPerform, filterByTopicScope, getRole } from '../domain/permissions';
 import { generateReportTasks } from '../domain/reporting';
-import { isTopicLead } from '../domain/topic-access';
+import { canAccessTopicByMembership, isInternalTopicUnit, isTopicLead } from '../domain/topic-access';
 
 export interface AppData {
   project: Project;
@@ -57,6 +57,7 @@ export interface AppState extends AppData {
   removeUnit: (id: string) => void;
   addTopic: (topic: Topic) => void;
   updateTopic: (id: string, updates: Partial<Topic>) => void;
+  toggleTopicEnabled: (id: string, enabled: boolean) => void;
   removeTopic: (id: string) => void;
   addNode: (node: TimeNode) => void;
   updateNode: (id: string, updates: Partial<TimeNode>) => void;
@@ -83,11 +84,12 @@ export interface AppState extends AppData {
   advanceAchievement: (id: string, action: AchievementAction, operatorId: string) => void;
   reviewAchievement: (id: string, action: AchievementAction, operatorId: string, opinion: string) => void;
   saveReport: (report: ProgressReport) => void;
+  saveReportTask: (task: ReportTask) => void;
   saveReportRule: (rule: ReportSubmissionRule) => void;
   submitReport: (id: string, operatorId: string) => void;
   reviewReport: (id: string, action: ReportAction, operatorId: string, opinion: string) => void;
   addSelfFundedProject: (project: SelfFundedProject, operatorId: string) => void;
-  saveArchiveSubmission: (submission: ArchiveSubmission) => void;
+  saveArchiveSubmission: (submission: ArchiveSubmission, operatorId: string) => void;
   submitArchive: (id: string, operatorId: string) => void;
   reviewArchive: (id: string, action: ArchiveAction, operatorId: string, opinion: string) => void;
   addArchiveCategory: (category: ArchiveCategory) => void;
@@ -168,7 +170,9 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   removeUnit: (id) => set((state) => ({ units: state.units.filter((unit) => unit.id !== id) })),
   addTopic: (topic) => set((state) => ({
     topics: [...state.topics, topic],
-    topicMemberships: [...state.topicMemberships, { id: `membership-${topic.id}-${topic.leadingUnitId}`, topicId: topic.id, unitId: topic.leadingUnitId, membershipType: 'LEAD', principalName: topic.principalName, contactName: topic.contactName, contactPhone: topic.contactPhone, contactEmail: topic.contactEmail, enabled: true, createdAt: today(), updatedAt: today() }],
+    topicMemberships: topic.leadingUnitId
+      ? [...state.topicMemberships, { id: `membership-${topic.id}-${topic.leadingUnitId}`, topicId: topic.id, unitId: topic.leadingUnitId, membershipType: 'LEAD', principalName: topic.principalName, contactName: topic.contactName, contactPhone: topic.contactPhone, contactEmail: topic.contactEmail, enabled: true, createdAt: today(), updatedAt: today() }]
+      : state.topicMemberships,
   })),
   updateTopic: (id, updates) => set((state) => {
     const current = state.topics.find((topic) => topic.id === id);
@@ -182,6 +186,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
       : { id: `membership-${id}-${updates.leadingUnitId}`, topicId: id, unitId: updates.leadingUnitId, membershipType: 'LEAD', enabled: true, createdAt: today(), updatedAt: today() };
     return { topics, topicMemberships: [...withoutOldLead.filter((item) => item.id !== existing?.id), newLead] };
   }),
+  toggleTopicEnabled: (id, enabled) => set((state) => ({ topics: state.topics.map((topic) => topic.id === id ? { ...topic, enabled } : topic) })),
   removeTopic: (id) => set((state) => ({ topics: state.topics.filter((topic) => topic.id !== id) })),
   addNode: (node) => set((state) => ({ nodes: [...state.nodes, node] })),
   updateNode: (id, updates) => set((state) => ({ nodes: state.nodes.map((node) => node.id === id ? { ...node, ...updates } : node) })),
@@ -222,7 +227,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const current = get().achievements.find((achievement) => achievement.id === id);
     const operator = get().users.find((user) => user.id === operatorId);
     if (!current || !operator) throw new Error('成果或操作人不存在');
-    if (!canPerform(operator, get().roles, 'achievement.submit') || !canAccessTopic(operator, current.topicId)) throw new Error('没有该课题成果的提交权限');
+    if (!canPerform(operator, get().roles, 'achievement.submit') || !canAccessTopicByMembership(operator, current.topicId, get().topicMemberships) || (current.uploadUnitId ?? current.unitId) !== operator.unitId) throw new Error('没有该课题成果的提交权限');
     if (!['SUBMIT_PRE_REVIEW', 'REGISTER_EXTERNAL_SUBMISSION', 'START_FORMAL', 'SUBMIT_FORMAL'].includes(action)) throw new Error('该动作不是成果提交动作');
     const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
     set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? {
@@ -265,6 +270,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
       ? state.reports.map((item) => item.id === report.id ? report : item)
       : [...state.reports, report],
   })),
+  saveReportTask: (task) => set((state) => ({ reportTasks: state.reportTasks.some((item) => item.id === task.id) ? state.reportTasks.map((item) => item.id === task.id ? task : item) : [...state.reportTasks, task] })),
   saveReportRule: (rule) => set((state) => {
     const reportRules = state.reportRules.some((item) => item.id === rule.id) ? state.reportRules.map((item) => item.id === rule.id ? rule : item) : [...state.reportRules, rule];
     return { reportRules, reportTasks: generateReportTasks(state.topics, reportRules, state.reportTasks, state.reports) };
@@ -273,7 +279,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const report = get().reports.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
     if (!report || !operator) throw new Error('报告或操作人不存在');
-    if (!canPerform(operator, get().roles, 'report.submit') || !canAccessTopic(operator, report.topicId) || !isTopicLead(operator, report.topicId, get().topicMemberships)) throw new Error('只有课题牵头单位可以提交该课题月季报');
+    if (!canPerform(operator, get().roles, 'report.submit') || !canAccessTopicByMembership(operator, report.topicId, get().topicMemberships) || !isTopicLead(operator, report.topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以提交月季报');
     const status = nextReportStatus(report.status, 'SUBMIT');
     set((state) => ({ reports: state.reports.map((item) => item.id === id ? { ...item, status, submittedAt: today(), updatedAt: today() } : item) }));
   },
@@ -297,23 +303,29 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   },
   addSelfFundedProject: (project, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!operator || !canPerform(operator, get().roles, 'self-funded.manage') || !canAccessTopic(operator, project.topicId)) throw new Error('没有该课题配套自筹项目的维护权限');
+    if (!operator || !isInternalTopicUnit(operator) || !canPerform(operator, get().roles, 'self-funded.manage') || !canAccessTopicByMembership(operator, project.topicId, get().topicMemberships) || project.ownerUnitId !== operator.unitId) throw new Error('没有该课题配套自筹项目的维护权限');
     set((state) => ({ selfFundedProjects: [...state.selfFundedProjects, project] }));
   },
-  saveArchiveSubmission: (submission) => set((state) => ({
-    archiveSubmissions: state.archiveSubmissions.some((item) => item.id === submission.id)
-      ? state.archiveSubmissions.map((item) => item.id === submission.id ? submission : item)
-      : [...state.archiveSubmissions, submission],
-  })),
+  saveArchiveSubmission: (submission, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator) throw new Error('操作账号不存在');
+    const canPublic = submission.ownerType === 'PROJECT_PUBLIC' && canPerform(operator, get().roles, 'archive.public.submit');
+    const canNational = submission.ownerType === 'TOPIC_NATIONAL' && canPerform(operator, get().roles, 'archive.topic.submit') && canAccessTopicByMembership(operator, submission.topicId, get().topicMemberships) && submission.unitId === operator.unitId;
+    const project = submission.ownerType === 'SELF_FUNDED' ? get().selfFundedProjects.find((item) => item.id === submission.ownerId) : undefined;
+    const canSelf = Boolean(project && isInternalTopicUnit(operator) && canPerform(operator, get().roles, 'self-funded.manage') && project.ownerUnitId === operator.unitId);
+    if (!canPublic && !canNational && !canSelf) throw new Error('没有该归档记录的编辑权限');
+    set((state) => ({ archiveSubmissions: state.archiveSubmissions.some((item) => item.id === submission.id) ? state.archiveSubmissions.map((item) => item.id === submission.id ? submission : item) : [...state.archiveSubmissions, submission] }));
+  },
   submitArchive: (id, operatorId) => {
     const submission = get().archiveSubmissions.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
     if (!submission || !operator) throw new Error('归档记录或操作人不存在');
     const canSubmitPublic = submission.ownerType === 'PROJECT_PUBLIC' && canPerform(operator, get().roles, 'archive.public.submit');
-    const canSubmitTopic = submission.ownerType !== 'PROJECT_PUBLIC' && canPerform(operator, get().roles, 'archive.topic.submit') && canAccessTopic(operator, submission.topicId);
-    if (!canSubmitPublic && !canSubmitTopic) throw new Error('没有该归档记录的提交权限');
-    const status = nextArchiveStatus(submission.ownerType, submission.status, 'SUBMIT');
-    set((state) => ({ archiveSubmissions: state.archiveSubmissions.map((item) => item.id === id ? { ...item, status, submittedAt: today(), updatedAt: today() } : item) }));
+    const canSubmitNational = submission.ownerType === 'TOPIC_NATIONAL' && canPerform(operator, get().roles, 'archive.topic.submit') && canAccessTopicByMembership(operator, submission.topicId, get().topicMemberships) && submission.unitId === operator.unitId;
+    const selfProject = submission.ownerType === 'SELF_FUNDED' ? get().selfFundedProjects.find((item) => item.id === submission.ownerId) : undefined;
+    const canSubmitSelf = Boolean(selfProject && isInternalTopicUnit(operator) && canPerform(operator, get().roles, 'self-funded.manage') && selfProject.ownerUnitId === operator.unitId);
+    if (!canSubmitPublic && !canSubmitNational && !canSubmitSelf) throw new Error('没有该归档记录的提交权限');
+    set((state) => ({ archiveSubmissions: state.archiveSubmissions.map((item) => item.id === id ? { ...item, status: '已归档', submittedAt: today(), updatedAt: today() } : item) }));
   },
   reviewArchive: (id, action, operatorId, opinion) => {
     const submission = get().archiveSubmissions.find((item) => item.id === id);
@@ -357,13 +369,22 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     return { success: true };
   },
   logout: () => set({ currentUser: null }),
-  addUser: (user) => set((state) => ({ users: [...state.users, user] })),
-  updateUser: (id, updates) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, ...updates } : user) })),
+  addUser: (user) => {
+    if (isTopicUnitRole(user.role) && get().users.some((item) => item.enabled && item.unitId === user.unitId && isTopicUnitRole(item.role))) throw new Error('该单位已经存在课题单位账号');
+    set((state) => ({ users: [...state.users, user] }));
+  },
+  updateUser: (id, updates) => {
+    const current = get().users.find((item) => item.id === id);
+    if (!current) return;
+    const next = { ...current, ...updates };
+    if (isTopicUnitRole(next.role) && get().users.some((item) => item.id !== id && item.enabled && item.unitId === next.unitId && isTopicUnitRole(item.role))) throw new Error('该单位已经存在课题单位账号');
+    set((state) => ({ users: state.users.map((user) => user.id === id ? next : user) }));
+  },
   removeUser: (id) => set((state) => ({ users: state.users.filter((user) => user.id !== id) })),
   resetUserPassword: (id) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, password: '123456' } : user) })),
   toggleUserEnabled: (id, enabled) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, enabled } : user) })),
   addRole: (role) => set((state) => ({ roles: [...state.roles, role] })),
-  updateRole: (id, updates) => set((state) => ({ roles: state.roles.map((role) => role.id === id && !role.builtIn ? { ...role, ...updates, updatedAt: new Date().toISOString() } : role) })),
+  updateRole: (id, updates) => set((state) => ({ roles: state.roles.map((role) => role.id === id && !role.builtIn ? { ...role, ...updates, pagePermissions: role.name === '外部课题单位' ? (updates.pagePermissions ?? role.pagePermissions).filter((item) => item !== 'self-funded-archive') : updates.pagePermissions ?? role.pagePermissions, actionPermissions: role.name === '外部课题单位' ? (updates.actionPermissions ?? role.actionPermissions).filter((item) => item !== 'self-funded.manage') : updates.actionPermissions ?? role.actionPermissions, updatedAt: new Date().toISOString() } : role) })),
   toggleRoleEnabled: (id, enabled) => set((state) => ({ roles: state.roles.map((role) => role.id === id && !role.builtIn ? { ...role, enabled, updatedAt: new Date().toISOString() } : role) })),
   removeRole: (id) => set((state) => {
     const role = state.roles.find((item) => item.id === id);
@@ -377,12 +398,16 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function isTopicUnitRole(role: UserRole): boolean {
+  return role === '内部课题单位' || role === '外部课题单位';
+}
+
 export function createAppStore() {
   return createStore<AppState>()(stateCreator);
 }
 
 export const useAppStore = create<AppState>()(
-  persist(stateCreator, { name: 'gzxm-research-management-v4', version: 4 }),
+  persist(stateCreator, { name: 'gzxm-research-management-v5', version: 5 }),
 );
 
 export const canEditAchievement = (status: string): boolean => ['草稿', '退回修改', '预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(status);
@@ -390,7 +415,6 @@ export const canEditAchievement = (status: string): boolean => ['草稿', '退�
 export const canAccess = (role: UserRole, module: string): boolean => {
   if (role === '系统管理员') return true;
   if (role === '项目技术负责人' || role === '科研助理') return ['research', 'archive', 'monitoring'].includes(module);
-  if (role === '课题牵头单位') return ['research', 'archive', 'monitoring', 'achievement-entry'].includes(module);
-  if (role === '课题承担单位') return ['research', 'archive', 'monitoring', 'achievement-entry'].includes(module);
+  if (role === '内部课题单位' || role === '外部课题单位') return ['research', 'archive', 'monitoring', 'achievement-entry'].includes(module);
   return false;
 };
