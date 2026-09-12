@@ -1,5 +1,5 @@
 import { Button, Input, Progress, Select, Space, Table, Tag, Upload, message } from 'antd';
-import { SendOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DownloadOutlined, EyeOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons';
 import type { ArchiveOwnerType } from '../../domain/archive-flow';
 import type { ArchiveRequirement, ArchiveSubmission } from '../../types';
 import { useAppStore } from '../../store';
@@ -29,6 +29,12 @@ export function RequirementChecklist({ requirements, ownerType, ownerId, topicId
       ...patch,
     }, state.currentUser!.id);
   };
+  const removeFile = (requirement: ArchiveRequirement, fileId: string) => {
+    const current = getSubmission(requirement.id);
+    if (!current) return;
+    save(requirement, { fileIds: current.fileIds.filter((id) => id !== fileId) });
+    message.success('文件已从清单中移除');
+  };
   const submit = (requirement: ArchiveRequirement) => {
     const current = getSubmission(requirement.id);
     if (!current) return message.warning('请先上传材料或确认适用性');
@@ -45,7 +51,7 @@ export function RequirementChecklist({ requirements, ownerType, ownerId, topicId
         const current = getSubmission(row.id); const applicability = row.requirementKind === 'REQUIRED' ? 'APPLICABLE' : current?.applicability ?? 'PENDING';
         return <Space direction="vertical" size={4}><Select disabled={!editable || row.requirementKind === 'REQUIRED' || current?.status === '已归档'} value={applicability} style={{ width: 130 }} onChange={(value) => save(row, { applicability: value })} options={[{ label: '待确认', value: 'PENDING' }, { label: '适用', value: 'APPLICABLE' }, { label: '不适用', value: 'NOT_APPLICABLE' }]} />{applicability === 'NOT_APPLICABLE' && <Input disabled={!editable || current?.status === '已归档'} value={current?.nonApplicableReason} placeholder="不适用理由" onChange={(event) => save(row, { applicability, nonApplicableReason: event.target.value })} />}</Space>;
       } },
-      { title: '材料', width: 180, render: (_, row) => { const current = getSubmission(row.id); return <Space direction="vertical"><span>{current?.fileIds.length ? `${current.fileIds.length} 个 Mock 文件` : '尚未上传'}</span>{editable && current?.status !== '已归档' && <Upload showUploadList={false} beforeUpload={(file) => { save(row, { fileIds: [...(current?.fileIds ?? []), `mock-${file.uid}`], applicability: current?.applicability === 'NOT_APPLICABLE' ? 'NOT_APPLICABLE' : 'APPLICABLE' }); message.success(`已记录文件：${file.name}`); return false; }}><Button size="small" icon={<UploadOutlined />}>选择文件</Button></Upload>}</Space>; } },
+      { title: '材料文件', width: 300, render: (_, row) => { const current = getSubmission(row.id); const files = current?.fileIds ?? []; return <Space direction="vertical" size={6} style={{ width: '100%' }}>{files.length ? files.map((fileId, index) => <Space key={fileId} size={4} wrap><span className="archive-file-name">{`文件${index + 1}`}</span><Button type="link" size="small" icon={<EyeOutlined />} onClick={() => message.info('原型演示：打开文件预览')}>查看</Button><Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => message.info('原型演示：开始下载文件')}>下载</Button>{editable && current?.status !== '已归档' && <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => removeFile(row, fileId)}>删除</Button>}</Space>) : <span>尚未上传</span>}{editable && current?.status !== '已归档' && <Upload showUploadList={false} beforeUpload={(file) => { save(row, { fileIds: [...files, `mock-${file.uid}`], applicability: current?.applicability === 'NOT_APPLICABLE' ? 'NOT_APPLICABLE' : 'APPLICABLE' }); message.success(`已记录文件：${file.name}`); return false; }}><Button size="small" icon={<UploadOutlined />}>上传文件</Button></Upload>}</Space>; } },
       { title: '状态', width: 110, render: (_, row) => <StatusTag status={getSubmission(row.id)?.status ?? '未提交'} /> },
       { title: '操作', width: 100, render: (_, row) => { const current = getSubmission(row.id); return editable && current?.status !== '已归档' ? <Button type="link" icon={<SendOutlined />} onClick={() => submit(row)}>归档</Button> : '—'; } },
     ]} />

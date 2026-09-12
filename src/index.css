@@ -65,6 +65,15 @@ button, input, textarea, select { font: inherit; }
 .archive-page-actions { display: flex; justify-content: flex-end; margin-bottom: 16px; }
 .archive-filter-card .ant-card-body { padding: 18px 24px; }
 .archive-filter-card b { color: #1f2937; white-space: nowrap; }
+.archive-content-card { min-height: 520px; }
+.archive-content-card > .ant-card-body { min-height: 472px; }
+.archive-folder-card { position: relative; min-height: 118px; }
+.archive-folder-icon { color: #f5b83d; font-size: 28px; margin-top: 2px; }
+.archive-folder-name { color: #1f2937; font-weight: 600; line-height: 24px; }
+.archive-folder-meta, .archive-folder-count { color: #8c8c8c; font-size: 12px; }
+.archive-folder-card .ant-progress { width: 150px; margin: 6px 0 2px; display: block; }
+.archive-folder-delete { position: absolute; right: 8px; top: 8px; }
+.archive-file-name { min-width: 58px; color: #1f2937; }
 .achievement-filter-card .ant-card-body { padding: 20px 24px 4px; }
 .achievement-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(190px, 1fr)) auto; gap: 0 20px; align-items: start; }
 .achievement-filter-grid.is-expanded { grid-template-columns: repeat(3, minmax(260px, 1fr)); }

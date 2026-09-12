@@ -236,6 +236,7 @@ export interface ArchiveMaterialVersion {
 
 export interface ArchiveRequirement {
   id: string; projectId: string; categoryId: string; name: string;
+  topicId?: string;
   required: boolean; requiredQuantity: number;
   applicableNodeId?: string; description?: string;
   ownerType?: 'PROJECT_PUBLIC' | 'TOPIC_NATIONAL' | 'SELF_FUNDED';
