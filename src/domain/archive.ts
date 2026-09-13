@@ -6,19 +6,31 @@ export interface ArchiveCompletion {
   rate: number;
 }
 
+export function isArchiveRequirementComplete(
+  requirement: ArchiveRequirement,
+  submission?: ArchiveSubmission,
+): boolean {
+  const uploadedCount = submission?.fileIds?.length ?? 0;
+  const hasRequiredFiles = uploadedCount >= Math.max(requirement.requiredQuantity || 1, 1);
+  if (!hasRequiredFiles) return false;
+  if (requirement.ownerType === 'PROJECT_PUBLIC') {
+    return ['已通过', '已归档'].includes(submission?.status ?? '');
+  }
+  return true;
+}
+
 export function archiveCompletion(
   requirements: ArchiveRequirement[],
   submissions: ArchiveSubmission[],
 ): ArchiveCompletion {
   const submissionByRequirement = new Map(submissions.map((item) => [item.requirementId, item]));
-  const applicableRequirements = requirements.filter((requirement) => {
+  const requiredRequirements = requirements.filter((requirement) => {
     if (requirement.requirementKind !== 'CONDITIONAL') return true;
+    if (requirement.ownerType !== 'PROJECT_PUBLIC') return false;
     return submissionByRequirement.get(requirement.id)?.applicability === 'APPLICABLE';
   });
-  const completed = applicableRequirements.filter(
-    (requirement) => ['已通过', '已归档'].includes(submissionByRequirement.get(requirement.id)?.status ?? ''),
-  ).length;
-  const required = applicableRequirements.length;
+  const completed = requiredRequirements.filter((requirement) => isArchiveRequirementComplete(requirement, submissionByRequirement.get(requirement.id))).length;
+  const required = requiredRequirements.length;
   return {
     required,
     completed,

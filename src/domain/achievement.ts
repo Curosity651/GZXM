@@ -1,7 +1,7 @@
 import type { AchievementAction } from './workflows';
 import type { Achievement, AchievementType, AchievementWorkflowStatus, UnitIndicatorAllocation, UserRole } from '../types';
 
-export type AchievementStageKey = 'initiated' | 'preApproved' | 'external' | 'formal' | 'effective';
+export type AchievementStageKey = 'initiated' | 'preApproved' | 'external' | 'formal' | 'supplement' | 'effective';
 
 export interface AchievementProgressRow {
   key: string;
@@ -14,20 +14,24 @@ export interface AchievementProgressRow {
   preApproved: number;
   external: number;
   formal: number;
+  supplement: number;
   effective: number;
   completionRate: number;
   achievements: Achievement[];
 }
 
-const PRE_APPROVED = new Set<AchievementWorkflowStatus>(['预审通过', '允许投稿/申请', '已投稿/已申请', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', '已生效']);
-const EXTERNAL = new Set<AchievementWorkflowStatus>(['已投稿/已申请', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', '已生效']);
-const FORMAL = new Set<AchievementWorkflowStatus>(['正式成果草稿', '正式初审中', '正式终审中', '正式退回', '已生效']);
+const postFormalStatuses: AchievementWorkflowStatus[] = ['待见刊补充', '待授权补充', '补充初审中', '补充终审中', '补充退回', '已生效'];
+const PRE_APPROVED = new Set<AchievementWorkflowStatus>(['预审通过', '允许投稿/申请', '已投稿/已申请', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', ...postFormalStatuses]);
+const EXTERNAL = new Set<AchievementWorkflowStatus>(['已投稿/已申请', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', ...postFormalStatuses]);
+const FORMAL = new Set<AchievementWorkflowStatus>(['正式成果草稿', '正式初审中', '正式终审中', '正式退回', ...postFormalStatuses]);
+const SUPPLEMENT = new Set<AchievementWorkflowStatus>(['待见刊补充', '待授权补充', '补充初审中', '补充终审中', '补充退回', '已生效']);
 
 export function hasReachedAchievementStage(status: string, stage: AchievementStageKey): boolean {
   if (stage === 'initiated') return true;
   if (stage === 'preApproved') return PRE_APPROVED.has(status as AchievementWorkflowStatus);
   if (stage === 'external') return EXTERNAL.has(status as AchievementWorkflowStatus);
   if (stage === 'formal') return FORMAL.has(status as AchievementWorkflowStatus);
+  if (stage === 'supplement') return SUPPLEMENT.has(status as AchievementWorkflowStatus);
   return status === '已生效';
 }
 
@@ -41,8 +45,11 @@ export function aggregateAchievementProgress(allocations: UnitIndicatorAllocatio
   return [...grouped.values()].map((allocation) => {
     const matched = achievements.filter((item) => item.topicId === allocation.topicId
       && (item.uploadUnitId ?? item.unitId) === allocation.unitId
-      && (item.indicatorDefinitionId ? item.indicatorDefinitionId === allocation.indicatorDefinitionId : item.achievementType === allocation.achievementType));
-    const count = (stage: AchievementStageKey) => matched.filter((item) => hasReachedAchievementStage(item.status, stage)).length;
+      && achievementMatchesIndicator(item, allocation.indicatorDefinitionId, allocation.achievementType));
+    const count = (stage: AchievementStageKey) => {
+      if (stage === 'external' && !['学术论文', '发明专利'].includes(allocation.achievementType)) return 0;
+      return matched.filter((item) => item.countsToIndicator || hasReachedAchievementStage(item.status, stage)).length;
+    };
     const effective = count('effective');
     return {
       key: `${allocation.topicId}|${allocation.unitId}|${allocation.indicatorDefinitionId}`,
@@ -55,6 +62,7 @@ export function aggregateAchievementProgress(allocations: UnitIndicatorAllocatio
       preApproved: count('preApproved'),
       external: count('external'),
       formal: count('formal'),
+      supplement: count('supplement'),
       effective,
       completionRate: allocation.targetQuantity > 0 ? Math.round(effective / allocation.targetQuantity * 100) : 0,
       achievements: matched,
@@ -62,16 +70,25 @@ export function aggregateAchievementProgress(allocations: UnitIndicatorAllocatio
   });
 }
 
-export function initialAchievementStatus(type: AchievementType): AchievementWorkflowStatus {
-  return type === '人才培养' ? '正式成果草稿' : '预审草稿';
+export function initialAchievementStatus(_type: AchievementType): AchievementWorkflowStatus {
+  return '预审草稿';
 }
 
 export function reviewActionFor(status: AchievementWorkflowStatus, role: UserRole): AchievementAction | null {
-  if (role === '科研助理' && (status === '预审初审中' || status === '正式初审中')) return 'APPROVE_INITIAL';
-  if (role === '项目技术负责人' && (status === '预审终审中' || status === '正式终审中')) return 'APPROVE_FINAL';
+  if (role === '科研助理' && (status === '预审初审中' || status === '正式初审中' || status === '补充初审中')) return 'APPROVE_INITIAL';
+  if (role === '项目技术负责人' && (status === '预审终审中' || status === '正式终审中' || status === '补充终审中')) return 'APPROVE_FINAL';
   return null;
 }
 
 export function isEditableAchievementStatus(status: string): boolean {
-  return ['预审草稿', '预审退回', '允许投稿/申请', '已投稿/已申请', '正式成果草稿', '正式退回'].includes(status);
+  return ['预审草稿', '预审退回', '允许投稿/申请', '已投稿/已申请', '正式成果草稿', '正式退回', '待见刊补充', '待授权补充', '补充退回'].includes(status);
+}
+
+export function achievementMatchesIndicator(achievement: Achievement, indicatorDefinitionId: string, achievementType: AchievementType): boolean {
+  if (achievement.achievementType !== achievementType) return false;
+  if (indicatorDefinitionId === 'indicator-chinese-core-journal') return achievement.isChineseCoreJournal === true || achievement.paperType === '中文核心';
+  if (indicatorDefinitionId === 'indicator-power-grid-first-author-paper') return achievement.isPowerGridFirstAuthor === true;
+  if (indicatorDefinitionId === 'indicator-power-grid-first-applicant-patent') return achievement.isPowerGridFirstApplicant === true;
+  if (indicatorDefinitionId === 'indicator-power-grid-first-completer-copyright') return achievement.isPowerGridFirstCompleter === true;
+  return achievement.indicatorDefinitionId ? achievement.indicatorDefinitionId === indicatorDefinitionId : achievement.achievementType === achievementType;
 }

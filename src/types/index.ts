@@ -36,13 +36,14 @@ export interface TopicPowerGridRequirement {
 export type AchievementType = '学术论文' | '发明专利' | '软件著作权' | '标准规范' | '人才培养';
 export const ACHIEVEMENT_TYPES: AchievementType[] = ['学术论文', '发明专利', '软件著作权', '标准规范', '人才培养'];
 
-export type PaperType = 'SCI' | 'EI' | '中文核心' | 'CSCD' | '其他';
-export const PAPER_TYPES: PaperType[] = ['SCI', 'EI', '中文核心', 'CSCD', '其他'];
+export type PaperType = 'SCI' | 'EI' | 'CSCD' | '其他' | '无';
+export const PAPER_TYPES: PaperType[] = ['SCI', 'EI', 'CSCD', '其他', '无'];
 export type EducationLevel = '博士' | '硕士';
 
 export type AchievementWorkflowStatus =
   | '预审草稿' | '预审初审中' | '预审终审中' | '预审退回' | '预审通过' | '允许投稿/申请' | '已投稿/已申请'
-  | '正式成果草稿' | '正式初审中' | '正式终审中' | '正式退回' | '已生效';
+  | '正式成果草稿' | '正式初审中' | '正式终审中' | '正式退回'
+  | '待见刊补充' | '待授权补充' | '补充初审中' | '补充终审中' | '补充退回' | '已生效';
 export type AchievementStatus = AchievementWorkflowStatus | '草稿' | '已提交' | '审批中' | '审批通过' | '审批不通过' | '退回修改';
 export const ACHIEVEMENT_STATUS: AchievementStatus[] = ['草稿', '已提交', '审批中', '审批通过', '审批不通过', '退回修改'];
 
@@ -144,6 +145,9 @@ export interface Achievement {
 
   // 论文特有
   isChineseJournal?: boolean;
+  isChineseCoreJournal?: boolean;
+  isPowerGridFirstAuthor?: boolean;
+  paperFormType?: '期刊论文' | '会议论文';
   paperType?: string; journalName?: string; cnNumber?: string; issn?: string;
   doi?: string; firstAuthor?: string; correspondingAuthor?: string; allAuthors?: string;
   signingUnitList?: string; firstSigningUnit?: string; firstAuthorUnit?: string;
@@ -152,16 +156,19 @@ export interface Achievement {
   englishTitle?: string; journalLevel?: string; intendedJournal?: string;
 
   // 专利特有
+  isPowerGridFirstApplicant?: boolean;
   patentScope?: '国内' | '国际'; applicant?: string; applicantList?: string;
   firstApplicant?: string; inventors?: string; inventorList?: string;
   firstInventor?: string; firstInventorUnit?: string;
   applicationNumber?: string; receiptNumber?: string; applicationDate?: string;
+  publicationNumber?: string;
   receiptDate?: string; grantDate?: string; patentNumber?: string;
   grantPublicationNumber?: string; grantPublicationDate?: string;
   patentHolderList?: string; legalStatus?: string;
   technicalField?: string; applicationCountry?: string; ownershipDescription?: string;
 
   // 软著特有
+  firstCompleter?: string; isPowerGridFirstCompleter?: boolean;
   shortName?: string; version?: string; softwareFullName?: string;
   copyrightOwner?: string; copyrightOwnerList?: string; firstCopyrightOwner?: string;
   developers?: string; mainDevelopers?: string; firstDeveloper?: string;
@@ -249,6 +256,14 @@ export interface ArchiveRequirement {
 export type ArchiveApplicability = 'PENDING' | 'APPLICABLE' | 'NOT_APPLICABLE';
 export type ArchiveWorkflowStatus = '未提交' | '草稿' | '初审中' | '终审中' | '已通过' | '已归档' | '退回修改';
 
+export interface ArchiveSubmissionFile {
+  id: string;
+  name: string;
+  size: number;
+  uploader: string;
+  uploadedAt: string;
+}
+
 export interface ArchiveSubmission {
   id: string;
   requirementId: string;
@@ -260,6 +275,7 @@ export interface ArchiveSubmission {
   nonApplicableReason?: string;
   status: ArchiveWorkflowStatus;
   fileIds: string[];
+  files?: ArchiveSubmissionFile[];
   version: number;
   submittedAt?: string;
   updatedAt: string;
@@ -326,7 +342,7 @@ export interface User {
   createdAt: string; lastLoginAt?: string;
 }
 
-export type ApprovalStage = 'PRE_REVIEW' | 'FORMAL' | 'REPORT' | 'ARCHIVE';
+export type ApprovalStage = 'PRE_REVIEW' | 'FORMAL' | 'SUPPLEMENT' | 'REPORT' | 'ARCHIVE';
 export type ApprovalLevel = 'INITIAL' | 'FINAL';
 export type ApprovalDecision = 'APPROVED' | 'RETURNED';
 

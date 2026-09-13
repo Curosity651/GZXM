@@ -57,9 +57,9 @@ const pagePermissions: Record<UserRole, PageKey[] | 'ALL'> = {
 };
 
 const actionPermissions: Record<ActionKey, UserRole[]> = {
-  'topic.manage': ['科研助理'],
-  'indicator.manage': ['科研助理'],
-  'topic-indicator.publish': ['科研助理'],
+  'topic.manage': ['项目技术负责人', '科研助理'],
+  'indicator.manage': ['项目技术负责人', '科研助理'],
+  'topic-indicator.publish': ['项目技术负责人', '科研助理'],
   'topic-unit.manage': ['内部课题单位', '外部课题单位'],
   'unit-allocation.manage': ['内部课题单位', '外部课题单位'],
   'unit-allocation.publish': ['内部课题单位', '外部课题单位'],

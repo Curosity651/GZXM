@@ -14,15 +14,20 @@ type WorkScope = '待我审批' | '已审批' | '全部记录';
 export function AchievementApprovalPage() {
   const state = useAppStore();
   const user = state.currentUser!;
-  const [stage, setStage] = useState<'pre' | 'formal'>('pre');
+  const [stage, setStage] = useState<'pre' | 'formal' | 'supplement'>('pre');
   const [scope, setScope] = useState<WorkScope>('待我审批');
   const [detail, setDetail] = useState<Achievement | null>(null);
   const [opinion, setOpinion] = useState('');
   const [decision, setDecision] = useState<'approve' | 'return' | null>(null);
 
   const visible = useMemo(() => state.achievements.filter((item) => canViewAchievement(user, item, state.topicMemberships)), [state.achievements, state.topicMemberships, user]);
-  const stageRows = visible.filter((item) => stage === 'pre' ? item.status.includes('预审') || item.status === '允许投稿/申请' : item.status.startsWith('正式') || item.status === '已生效');
-  const processedIds = new Set(state.approvalRecords.filter((item) => item.businessType === 'ACHIEVEMENT' && item.operatorId === user.id && item.stage === (stage === 'pre' ? 'PRE_REVIEW' : 'FORMAL')).map((item) => item.businessId));
+  const stageRows = visible.filter((item) => stage === 'pre'
+    ? item.status.includes('预审') || item.status === '允许投稿/申请'
+    : stage === 'formal'
+      ? item.status.startsWith('正式')
+      : item.status.includes('补充') || item.status === '已生效');
+  const approvalStage = stage === 'pre' ? 'PRE_REVIEW' : stage === 'formal' ? 'FORMAL' : 'SUPPLEMENT';
+  const processedIds = new Set(state.approvalRecords.filter((item) => item.businessType === 'ACHIEVEMENT' && item.operatorId === user.id && item.stage === approvalStage).map((item) => item.businessId));
   const rows = stageRows.filter((item) => scope === '待我审批' ? Boolean(reviewActionFor(item.status as never, user.role)) : scope === '已审批' ? processedIds.has(item.id) : true);
   const currentAction = detail ? reviewActionFor(detail.status as never, user.role) : null;
 
@@ -37,8 +42,8 @@ export function AchievementApprovalPage() {
 
   return <>
     <Card>
-      <Tabs activeKey={stage} onChange={(key) => { setStage(key as 'pre' | 'formal'); setScope('待我审批'); }} items={[
-        { key: 'pre', label: '投稿/申请前预审' }, { key: 'formal', label: '正式成果审批' },
+      <Tabs activeKey={stage} onChange={(key) => { setStage(key as 'pre' | 'formal' | 'supplement'); setScope('待我审批'); }} items={[
+        { key: 'pre', label: '成果预审' }, { key: 'formal', label: '正式成果审批' }, { key: 'supplement', label: '见刊/授权补充审批' },
       ]} />
       <Segmented value={scope} onChange={(value) => setScope(value as WorkScope)} options={['待我审批', '已审批', '全部记录']} style={{ marginBottom: 16 }} />
       <Table rowKey="id" dataSource={rows} columns={[

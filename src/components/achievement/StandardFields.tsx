@@ -4,12 +4,12 @@ export function StandardFields() {
   return (
     <Row gutter={16}>
       <Col span={12}>
-        <Form.Item label="标准类型/级别" name="standardLevel">
+        <Form.Item label="标准类型/级别" name="standardLevel" rules={[{ required: true, message: '请填写标准类型或级别' }]}>
           <Input />
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="牵头单位" name="leadingUnit">
+        <Form.Item label="牵头单位" name="leadingUnit" rules={[{ required: true, message: '请填写牵头单位' }]}>
           <Input />
         </Form.Item>
       </Col>
@@ -19,7 +19,7 @@ export function StandardFields() {
         </Form.Item>
       </Col>
       <Col span={24}>
-        <Form.Item label="主要起草人" name="drafters">
+        <Form.Item label="主要起草人" name="drafters" rules={[{ required: true, message: '请填写主要起草人' }]}>
           <Input />
         </Form.Item>
       </Col>
@@ -29,7 +29,7 @@ export function StandardFields() {
         </Form.Item>
       </Col>
       <Col span={24}>
-        <Form.Item label="标准当前阶段" name="currentStage">
+        <Form.Item label="标准当前阶段" name="currentStage" rules={[{ required: true, message: '请填写标准当前阶段' }]}>
           <Input />
         </Form.Item>
       </Col>

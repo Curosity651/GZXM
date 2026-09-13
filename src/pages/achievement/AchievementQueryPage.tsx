@@ -14,9 +14,10 @@ export function AchievementQueryPage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const topics = accessibleTopics(user, state.topics, state.topicMemberships);
-  const global = ['系统管理员', '项目技术负责人', '科研助理'].includes(user.role);
+  const global = ['项目技术负责人', '科研助理'].includes(user.role);
   const visibleAchievements = state.achievements.filter((item) => canViewAchievement(user, item, state.topicMemberships));
   const visibleAllocations = state.unitIndicatorAllocations.filter((item) => {
+    if (item.status !== '已下发' || item.targetQuantity <= 0) return false;
     if (global) return true;
     if (!topics.some((topic) => topic.id === item.topicId)) return false;
     return isTopicLead(user, item.topicId, state.topicMemberships) || item.unitId === user.unitId;
@@ -28,12 +29,12 @@ export function AchievementQueryPage() {
   const [selected, setSelected] = useState<AchievementProgressRow | null>(null);
   const [detail, setDetail] = useState<Achievement | null>(null);
   const rows = allRows.filter((item) => (!topicId || item.topicId === topicId) && (!unitId || item.unitId === unitId) && (!definitionId || item.indicatorDefinitionId === definitionId));
-  const totals = rows.reduce((sum, item) => ({ target: sum.target + item.target, initiated: sum.initiated + item.initiated, preApproved: sum.preApproved + item.preApproved, external: sum.external + item.external, formal: sum.formal + item.formal, effective: sum.effective + item.effective }), { target: 0, initiated: 0, preApproved: 0, external: 0, formal: 0, effective: 0 });
+  const totals = rows.reduce((sum, item) => ({ target: sum.target + item.target, initiated: sum.initiated + item.initiated, preApproved: sum.preApproved + item.preApproved, external: sum.external + item.external, formal: sum.formal + item.formal, supplement: sum.supplement + item.supplement, effective: sum.effective + item.effective }), { target: 0, initiated: 0, preApproved: 0, external: 0, formal: 0, supplement: 0, effective: 0 });
   const rate = totals.target > 0 ? Math.round(totals.effective / totals.target * 100) : 0;
 
   return <>
     <Row gutter={12} style={{ marginBottom: 16 }}>
-      {[['指标总数', totals.target], ['已发起', totals.initiated], ['预审通过', totals.preApproved], ['已投稿/申请', totals.external], ['正式成果', totals.formal], ['已生效', totals.effective]].map(([label, value]) => <Col span={4} key={String(label)}><Card><Statistic title={label} value={value} /></Card></Col>)}
+      {[['指标总数', totals.target], ['已发起', totals.initiated], ['预审通过', totals.preApproved], ['已投稿/申请', totals.external], ['正式审批', totals.formal], ['补充阶段', totals.supplement], ['已生效', totals.effective]].map(([label, value]) => <Col flex="1 1 130px" key={String(label)}><Card><Statistic title={label} value={value} /></Card></Col>)}
     </Row>
     <Card style={{ marginBottom: 16 }}><Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}><div><Text type="secondary">总体指标完成率</Text><div><Text strong style={{ fontSize: 24 }}>{rate}%</Text><Text type="secondary">　{totals.effective}/{totals.target}</Text></div></div><Progress percent={Math.min(rate, 100)} status={rate >= 100 ? 'success' : 'active'} style={{ width: 420 }} format={() => rate > 100 ? `${rate}%（超额）` : `${rate}%`} /></Space></Card>
     <Card>
@@ -46,7 +47,7 @@ export function AchievementQueryPage() {
         { title: '课题', dataIndex: 'topicId', width: 190, fixed: 'left', render: (value) => state.topics.find((item) => item.id === value)?.name ?? value },
         { title: '单位', dataIndex: 'unitId', width: 190, render: (value) => state.units.find((item) => item.id === value)?.name ?? value },
         { title: '成果类型', dataIndex: 'indicatorDefinitionId', width: 130, render: (value, row) => state.indicatorDefinitions.find((item) => item.id === value)?.name ?? row.achievementType },
-        { title: '分配指标', dataIndex: 'target', width: 90 }, { title: '已发起', dataIndex: 'initiated', width: 80 }, { title: '预审通过', dataIndex: 'preApproved', width: 90 }, { title: '已投稿/申请', dataIndex: 'external', width: 110 }, { title: '正式成果', dataIndex: 'formal', width: 90 }, { title: '已生效', dataIndex: 'effective', width: 80 },
+        { title: '分配指标', dataIndex: 'target', width: 90 }, { title: '已发起', dataIndex: 'initiated', width: 80 }, { title: '预审通过', dataIndex: 'preApproved', width: 90 }, { title: '已投稿/申请', dataIndex: 'external', width: 110 }, { title: '正式审批', dataIndex: 'formal', width: 90 }, { title: '补充阶段', dataIndex: 'supplement', width: 90 }, { title: '已生效', dataIndex: 'effective', width: 80 },
         { title: '完成率', dataIndex: 'completionRate', width: 170, render: (value, row) => <Space><Progress type="circle" size={44} percent={Math.min(value, 100)} format={() => `${value}%`} /><Text type="secondary">{row.effective}/{row.target}</Text></Space> },
         { title: '操作', fixed: 'right', width: 90, render: (_, row) => <Button type="link" icon={<EyeOutlined />} onClick={() => setSelected(row)}>明细</Button> },
       ]} />

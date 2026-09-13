@@ -37,7 +37,8 @@ export function canManageTopicUnits(user: User, topicId: string, memberships: To
 }
 
 export function canViewAchievement(user: User, achievement: Achievement, memberships: TopicUnitMembership[]): boolean {
-  if (isGlobalUser(user)) return true;
+  if (user.role === '系统管理员') return false;
+  if (user.role === '项目技术负责人' || user.role === '科研助理') return true;
   if (!user.unitId) return false;
   if (isTopicLead(user, achievement.topicId, memberships)) return true;
   return achievement.uploadUnitId === user.unitId || achievement.unitId === user.unitId;

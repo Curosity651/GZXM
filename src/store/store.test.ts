@@ -34,13 +34,26 @@ describe('成果审批记录', () => {
     }));
   });
 
-  it('正式终审通过后才计入指标', () => {
+  it('专利正式终审后需完成授权补充两级审批才计入指标', () => {
     const store = createAppStore();
     store.getState().reviewAchievement('ach-formal-final', 'APPROVE_FINAL', 'user-leader', '同意');
 
-    const achievement = store.getState().achievements.find((item) => item.id === 'ach-formal-final');
-    expect(achievement?.status).toBe('已生效');
-    expect(achievement?.countsToIndicator).toBe(true);
+    let achievement = store.getState().achievements.find((item) => item.id === 'ach-formal-final')!;
+    expect(achievement.status).toBe('待授权补充');
+    expect(achievement.countsToIndicator).toBe(false);
+
+    store.getState().updateAchievement(achievement.id, { materials: [{
+      id: 'supplement-material', achievementId: achievement.id, materialType: '专利授权证书', name: '专利授权证书',
+      fileId: 'file-1', fileName: 'grant.pdf', fileUrl: '#', version: 1, status: '待审核',
+    }] });
+    store.getState().advanceAchievement(achievement.id, 'SUBMIT_SUPPLEMENT', 'user-pku');
+    store.getState().reviewAchievement(achievement.id, 'APPROVE_INITIAL', 'user-assistant', '材料完整');
+    store.getState().reviewAchievement(achievement.id, 'APPROVE_FINAL', 'user-leader', '同意生效');
+
+    achievement = store.getState().achievements.find((item) => item.id === 'ach-formal-final')!;
+    expect(achievement.status).toBe('已生效');
+    expect(achievement.countsToIndicator).toBe(true);
+    expect(achievement.materials[0].status).toBe('审核通过');
   });
 
   it('终审退回由项目技术负责人操作并记录为终审', () => {

@@ -55,9 +55,9 @@ export interface AppState extends AppData {
   addUnit: (unit: ProjectUnit) => void;
   updateUnit: (id: string, updates: Partial<ProjectUnit>) => void;
   removeUnit: (id: string) => void;
-  addTopic: (topic: Topic) => void;
-  updateTopic: (id: string, updates: Partial<Topic>) => void;
-  toggleTopicEnabled: (id: string, enabled: boolean) => void;
+  addTopic: (topic: Topic, operatorId: string) => void;
+  updateTopic: (id: string, updates: Partial<Topic>, operatorId: string) => void;
+  toggleTopicEnabled: (id: string, enabled: boolean, operatorId: string) => void;
   removeTopic: (id: string) => void;
   addNode: (node: TimeNode) => void;
   updateNode: (id: string, updates: Partial<TimeNode>) => void;
@@ -67,12 +67,12 @@ export interface AppState extends AppData {
   removeIndicator: (id: string) => void;
   batchUpdateIndicators: (updates: { id: string; plannedQuantity: number }[]) => void;
   saveIndicatorDefinition: (definition: IndicatorDefinition) => void;
-  saveTopicIndicators: (rows: TopicIndicator[]) => void;
-  publishTopicIndicators: (topicId: string, operatorName: string) => void;
-  saveTopicMembership: (membership: TopicUnitMembership) => void;
-  toggleTopicMembership: (id: string, enabled: boolean) => void;
-  saveUnitAllocations: (rows: UnitIndicatorAllocation[]) => void;
-  publishUnitAllocations: (topicId: string, operatorName: string) => void;
+  saveTopicIndicators: (rows: TopicIndicator[], operatorId: string) => void;
+  publishTopicIndicators: (topicId: string, operatorId: string) => void;
+  saveTopicMembership: (membership: TopicUnitMembership, operatorId: string) => void;
+  toggleTopicMembership: (id: string, enabled: boolean, operatorId: string) => void;
+  saveUnitAllocations: (rows: UnitIndicatorAllocation[], operatorId: string) => void;
+  publishUnitAllocations: (topicId: string, operatorId: string) => void;
   updateWarningRule: (id: string, updates: Partial<WarningRule>) => void;
   addAchievement: (achievement: Achievement) => void;
   updateAchievement: (id: string, updates: Partial<Achievement>) => void;
@@ -127,7 +127,8 @@ export function createInitialState(): AppData {
     };
     const status = statusMap[achievement.status] ?? achievement.status;
     const membership = MOCK_TOPIC_MEMBERSHIPS.find((item) => item.topicId === achievement.topicId && item.unitId === achievement.unitId);
-    const allocation = MOCK_UNIT_INDICATOR_ALLOCATIONS.find((item) => item.topicId === achievement.topicId && item.unitId === achievement.unitId && item.achievementType === achievement.achievementType);
+    const generalDefinition = MOCK_INDICATOR_DEFINITIONS.find((item) => item.name === achievement.achievementType);
+    const allocation = MOCK_UNIT_INDICATOR_ALLOCATIONS.find((item) => item.topicId === achievement.topicId && item.unitId === achievement.unitId && item.indicatorDefinitionId === (achievement.indicatorDefinitionId ?? generalDefinition?.id));
     return { ...achievement, status, countsToIndicator: status === '已生效', uploadUnitId: achievement.uploadUnitId ?? achievement.unitId, topicUnitMembershipId: achievement.topicUnitMembershipId ?? membership?.id, unitIndicatorAllocationId: achievement.unitIndicatorAllocationId ?? allocation?.id, recordVersion: achievement.recordVersion ?? 1, history: achievement.history ?? [] };
   });
   return structuredClone({
@@ -168,25 +169,59 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   addUnit: (unit) => set((state) => ({ units: [...state.units, unit] })),
   updateUnit: (id, updates) => set((state) => ({ units: state.units.map((unit) => unit.id === id ? { ...unit, ...updates } : unit) })),
   removeUnit: (id) => set((state) => ({ units: state.units.filter((unit) => unit.id !== id) })),
-  addTopic: (topic) => set((state) => ({
-    topics: [...state.topics, topic],
-    topicMemberships: topic.leadingUnitId
-      ? [...state.topicMemberships, { id: `membership-${topic.id}-${topic.leadingUnitId}`, topicId: topic.id, unitId: topic.leadingUnitId, membershipType: 'LEAD', principalName: topic.principalName, contactName: topic.contactName, contactPhone: topic.contactPhone, contactEmail: topic.contactEmail, enabled: true, createdAt: today(), updatedAt: today() }]
-      : state.topicMemberships,
-  })),
-  updateTopic: (id, updates) => set((state) => {
+  addTopic: (topic, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator || !canPerform(operator, get().roles, 'topic.manage')) throw new Error('没有新建课题的权限');
+    set((state) => ({
+      topics: [...state.topics, topic],
+      topicMemberships: topic.leadingUnitId
+        ? [...state.topicMemberships, { id: `membership-${topic.id}-${topic.leadingUnitId}`, topicId: topic.id, unitId: topic.leadingUnitId, membershipType: 'LEAD', principalName: topic.principalName, contactName: topic.contactName, contactPhone: topic.contactPhone, contactEmail: topic.contactEmail, enabled: true, createdAt: today(), updatedAt: today() }]
+        : state.topicMemberships,
+      users: state.users.map((user) => user.unitId === topic.leadingUnitId
+        ? { ...user, dataScope: 'TOPICS', topicIds: [...new Set([...(user.topicIds ?? []), topic.id])], topicId: user.topicId ?? topic.id }
+        : user),
+    }));
+  },
+  updateTopic: (id, updates, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator || !canPerform(operator, get().roles, 'topic.manage')) throw new Error('没有编辑课题的权限');
+    set((state) => {
     const current = state.topics.find((topic) => topic.id === id);
     if (!current) return {};
     const topics = state.topics.map((topic) => topic.id === id ? { ...topic, ...updates } : topic);
-    if (!updates.leadingUnitId || updates.leadingUnitId === current.leadingUnitId) return { topics };
+    if (!updates.leadingUnitId || updates.leadingUnitId === current.leadingUnitId) {
+      const topicMemberships = state.topicMemberships.map((item) => item.topicId === id && item.membershipType === 'LEAD' ? {
+        ...item,
+        principalName: updates.principalName ?? item.principalName,
+        contactName: updates.contactName ?? item.contactName,
+        contactPhone: updates.contactPhone ?? item.contactPhone,
+        contactEmail: updates.contactEmail ?? item.contactEmail,
+        updatedAt: today(),
+      } : item);
+      return { topics, topicMemberships };
+    }
     const withoutOldLead = state.topicMemberships.filter((item) => !(item.topicId === id && item.membershipType === 'LEAD'));
     const existing = withoutOldLead.find((item) => item.topicId === id && item.unitId === updates.leadingUnitId);
     const newLead: TopicUnitMembership = existing
-      ? { ...existing, membershipType: 'LEAD', enabled: true, updatedAt: today() }
-      : { id: `membership-${id}-${updates.leadingUnitId}`, topicId: id, unitId: updates.leadingUnitId, membershipType: 'LEAD', enabled: true, createdAt: today(), updatedAt: today() };
-    return { topics, topicMemberships: [...withoutOldLead.filter((item) => item.id !== existing?.id), newLead] };
-  }),
-  toggleTopicEnabled: (id, enabled) => set((state) => ({ topics: state.topics.map((topic) => topic.id === id ? { ...topic, enabled } : topic) })),
+      ? { ...existing, membershipType: 'LEAD', principalName: updates.principalName, contactName: updates.contactName, contactPhone: updates.contactPhone, contactEmail: updates.contactEmail, enabled: true, updatedAt: today() }
+      : { id: `membership-${id}-${updates.leadingUnitId}`, topicId: id, unitId: updates.leadingUnitId, membershipType: 'LEAD', principalName: updates.principalName, contactName: updates.contactName, contactPhone: updates.contactPhone, contactEmail: updates.contactEmail, enabled: true, createdAt: today(), updatedAt: today() };
+    const topicMemberships = [...withoutOldLead.filter((item) => item.id !== existing?.id), newLead];
+    const users = state.users.map((user) => {
+      if (user.unitId === updates.leadingUnitId) {
+        return { ...user, dataScope: 'TOPICS' as const, topicIds: [...new Set([...(user.topicIds ?? []), id])], topicId: user.topicId ?? id };
+      }
+      if (user.unitId !== current.leadingUnitId || topicMemberships.some((item) => item.topicId === id && item.unitId === user.unitId && item.enabled)) return user;
+      const topicIds = (user.topicIds ?? []).filter((topicId) => topicId !== id);
+      return { ...user, topicIds, topicId: user.topicId === id ? topicIds[0] : user.topicId };
+    });
+    return { topics, topicMemberships, users };
+    });
+  },
+  toggleTopicEnabled: (id, enabled, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator || !canPerform(operator, get().roles, 'topic.manage')) throw new Error('没有启停课题的权限');
+    set((state) => ({ topics: state.topics.map((topic) => topic.id === id ? { ...topic, enabled } : topic) }));
+  },
   removeTopic: (id) => set((state) => ({ topics: state.topics.filter((topic) => topic.id !== id) })),
   addNode: (node) => set((state) => ({ nodes: [...state.nodes, node] })),
   updateNode: (id, updates) => set((state) => ({ nodes: state.nodes.map((node) => node.id === id ? { ...node, ...updates } : node) })),
@@ -199,22 +234,54 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     return { indicators: state.indicators.map((indicator) => quantities.has(indicator.id) ? { ...indicator, plannedQuantity: quantities.get(indicator.id)!, updatedAt: today() } : indicator) };
   }),
   saveIndicatorDefinition: (definition) => set((state) => ({ indicatorDefinitions: state.indicatorDefinitions.some((item) => item.id === definition.id) ? state.indicatorDefinitions.map((item) => item.id === definition.id ? definition : item) : [...state.indicatorDefinitions, definition] })),
-  saveTopicIndicators: (rows) => set((state) => ({ topicIndicators: [...state.topicIndicators.filter((item) => !rows.some((row) => row.id === item.id)), ...rows] })),
-  publishTopicIndicators: (topicId, operatorName) => set((state) => ({ topicIndicators: state.topicIndicators.map((item) => item.topicId === topicId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operatorName, updatedAt: today() } : item) })),
-  saveTopicMembership: (membership) => set((state) => ({
-    topicMemberships: state.topicMemberships.some((item) => item.id === membership.id) ? state.topicMemberships.map((item) => item.id === membership.id ? membership : item) : [...state.topicMemberships, membership],
-    users: state.users.map((user) => user.unitId === membership.unitId && membership.enabled ? { ...user, dataScope: 'TOPICS', topicIds: [...new Set([...(user.topicIds ?? []), membership.topicId])], topicId: user.topicId ?? membership.topicId } : user),
-  })),
-  toggleTopicMembership: (id, enabled) => set((state) => {
-    const membership = state.topicMemberships.find((item) => item.id === id);
-    if (!membership || membership.membershipType === 'LEAD') return {};
-    return {
-      topicMemberships: state.topicMemberships.map((item) => item.id === id ? { ...item, enabled, updatedAt: today() } : item),
-      users: state.users.map((user) => user.unitId === membership.unitId ? { ...user, topicIds: enabled ? [...new Set([...(user.topicIds ?? []), membership.topicId])] : (user.topicIds ?? []).filter((topicId) => topicId !== membership.topicId) } : user),
-    };
-  }),
-  saveUnitAllocations: (rows) => set((state) => ({ unitIndicatorAllocations: [...state.unitIndicatorAllocations.filter((item) => !rows.some((row) => row.id === item.id)), ...rows] })),
-  publishUnitAllocations: (topicId, operatorName) => set((state) => ({ unitIndicatorAllocations: state.unitIndicatorAllocations.map((item) => item.topicId === topicId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operatorName, updatedAt: today() } : item) })),
+  saveTopicIndicators: (rows, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator || !canPerform(operator, get().roles, 'topic-indicator.publish')) throw new Error('没有编辑课题总体指标的权限');
+    set((state) => ({ topicIndicators: [...state.topicIndicators.filter((item) => !rows.some((row) => row.id === item.id)), ...rows] }));
+  },
+  publishTopicIndicators: (topicId, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator || !canPerform(operator, get().roles, 'topic-indicator.publish')) throw new Error('没有下发课题总体指标的权限');
+    set((state) => ({ topicIndicators: state.topicIndicators.map((item) => item.topicId === topicId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operator.name, updatedAt: today() } : item) }));
+  },
+  saveTopicMembership: (membership, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    const allowed = Boolean(operator && (canPerform(operator, get().roles, 'topic.manage') || (canPerform(operator, get().roles, 'topic-unit.manage') && isTopicLead(operator, membership.topicId, get().topicMemberships))));
+    if (!allowed) throw new Error('没有维护该课题承担单位的权限');
+    set((state) => ({
+      topicMemberships: state.topicMemberships.some((item) => item.id === membership.id) ? state.topicMemberships.map((item) => item.id === membership.id ? membership : item) : [...state.topicMemberships, membership],
+      users: state.users.map((user) => user.unitId === membership.unitId && membership.enabled ? { ...user, dataScope: 'TOPICS', topicIds: [...new Set([...(user.topicIds ?? []), membership.topicId])], topicId: user.topicId ?? membership.topicId } : user),
+    }));
+  },
+  toggleTopicMembership: (id, enabled, operatorId) => {
+    const membership = get().topicMemberships.find((item) => item.id === id);
+    const operator = get().users.find((item) => item.id === operatorId);
+    const allowed = Boolean(membership && operator && (canPerform(operator, get().roles, 'topic.manage') || (canPerform(operator, get().roles, 'topic-unit.manage') && isTopicLead(operator, membership.topicId, get().topicMemberships))));
+    if (!allowed) throw new Error('没有维护该课题承担单位的权限');
+    set((state) => {
+      const membership = state.topicMemberships.find((item) => item.id === id);
+      if (!membership || membership.membershipType === 'LEAD') return {};
+      return {
+        topicMemberships: state.topicMemberships.map((item) => item.id === id ? { ...item, enabled, updatedAt: today() } : item),
+        users: state.users.map((user) => {
+          if (user.unitId !== membership.unitId) return user;
+          const topicIds = enabled ? [...new Set([...(user.topicIds ?? []), membership.topicId])] : (user.topicIds ?? []).filter((topicId) => topicId !== membership.topicId);
+          return { ...user, topicIds, topicId: enabled ? user.topicId ?? membership.topicId : user.topicId === membership.topicId ? topicIds[0] : user.topicId };
+        }),
+      };
+    });
+  },
+  saveUnitAllocations: (rows, operatorId) => {
+    const topicId = rows[0]?.topicId;
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!topicId || !operator || !canPerform(operator, get().roles, 'unit-allocation.manage') || !isTopicLead(operator, topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以编辑单位指标分配');
+    set((state) => ({ unitIndicatorAllocations: [...state.unitIndicatorAllocations.filter((item) => !rows.some((row) => row.id === item.id)), ...rows] }));
+  },
+  publishUnitAllocations: (topicId, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator || !canPerform(operator, get().roles, 'unit-allocation.publish') || !isTopicLead(operator, topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以下发单位指标分配');
+    set((state) => ({ unitIndicatorAllocations: state.unitIndicatorAllocations.map((item) => item.topicId === topicId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operator.name, updatedAt: today() } : item) }));
+  },
   updateWarningRule: (id, updates) => set((state) => ({ warningRules: state.warningRules.map((rule) => rule.id === id ? { ...rule, ...updates } : rule) })),
   addAchievement: (achievement) => set((state) => ({ achievements: [...state.achievements, achievement] })),
   updateAchievement: (id, updates) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, ...updates, updatedAt: today() } : achievement) })),
@@ -228,11 +295,12 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const operator = get().users.find((user) => user.id === operatorId);
     if (!current || !operator) throw new Error('成果或操作人不存在');
     if (!canPerform(operator, get().roles, 'achievement.submit') || !canAccessTopicByMembership(operator, current.topicId, get().topicMemberships) || (current.uploadUnitId ?? current.unitId) !== operator.unitId) throw new Error('没有该课题成果的提交权限');
-    if (!['SUBMIT_PRE_REVIEW', 'REGISTER_EXTERNAL_SUBMISSION', 'START_FORMAL', 'SUBMIT_FORMAL'].includes(action)) throw new Error('该动作不是成果提交动作');
-    const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
+    if (!['SUBMIT_PRE_REVIEW', 'REGISTER_EXTERNAL_SUBMISSION', 'START_FORMAL', 'SUBMIT_FORMAL', 'SUBMIT_SUPPLEMENT'].includes(action)) throw new Error('该动作不是成果提交动作');
+    const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action, current.achievementType);
     set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? {
       ...achievement, status: nextStatus, submittedAt: action.startsWith('SUBMIT') ? today() : achievement.submittedAt,
       updatedAt: today(), countsToIndicator: false, recordVersion: (achievement.recordVersion ?? 0) + 1,
+      materials: action.startsWith('SUBMIT') ? achievement.materials.map((material) => material.status === '未提交' ? { ...material, status: '待审核' } : material) : achievement.materials,
       history: [...(achievement.history ?? []), { id: `history-${Date.now()}-${id}`, action, fromStatus: achievement.status, toStatus: nextStatus, operatorId, operatorName: operator.name, operatedAt: new Date().toISOString(), version: (achievement.recordVersion ?? 0) + 1 }],
     } : achievement) }));
   },
@@ -244,13 +312,13 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const atFinalLevel = current.status.includes('终审中');
     if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && !canPerform(operator, get().roles, 'achievement.initial.approve')) throw new Error('没有成果初审权限');
     if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && !canPerform(operator, get().roles, 'achievement.final.approve')) throw new Error('没有成果终审权限');
-    const workflowStatuses = ['预审草稿', '预审初审中', '预审终审中', '预审退回', '预审通过', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', '已生效'];
+    const workflowStatuses = ['预审草稿', '预审初审中', '预审终审中', '预审退回', '预审通过', '正式成果草稿', '正式初审中', '正式终审中', '正式退回', '待见刊补充', '待授权补充', '补充初审中', '补充终审中', '补充退回', '已生效'];
     if (!workflowStatuses.includes(current.status)) throw new Error('该成果仍使用旧版流程，不能执行新版审批');
-    const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action);
+    const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action, current.achievementType);
     const record: ApprovalRecord = {
       id: `approval-${Date.now()}-${id}`,
       businessType: 'ACHIEVEMENT', businessId: id,
-      stage: current.status.startsWith('预审') ? 'PRE_REVIEW' : 'FORMAL',
+      stage: current.status.startsWith('预审') ? 'PRE_REVIEW' : current.status.startsWith('补充') ? 'SUPPLEMENT' : 'FORMAL',
       level: action === 'APPROVE_FINAL' || atFinalLevel ? 'FINAL' : 'INITIAL',
       decision: action === 'RETURN' ? 'RETURNED' : 'APPROVED',
       opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: 1,
@@ -258,6 +326,9 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     set((state) => ({
       achievements: state.achievements.map((achievement) => achievement.id === id ? {
         ...achievement, status: nextStatus, countsToIndicator: nextStatus === '已生效', updatedAt: today(),
+        materials: achievement.materials.map((material) => material.status === '待审核' && (action === 'RETURN' || action === 'APPROVE_FINAL')
+          ? { ...material, status: action === 'RETURN' ? '退回修改' : '审核通过', reviewedAt: today(), reviewOpinion: action === 'RETURN' ? opinion : material.reviewOpinion }
+          : material),
         approvalOpinion: opinion, approver: operator.name, approvedAt: today(), returnReason: action === 'RETURN' ? opinion : undefined,
         recordVersion: (achievement.recordVersion ?? 0) + 1,
         history: [...(achievement.history ?? []), { id: `history-${Date.now()}-${id}`, action, fromStatus: achievement.status, toStatus: nextStatus, operatorId, operatorName: operator.name, opinion, operatedAt: new Date().toISOString(), version: (achievement.recordVersion ?? 0) + 1 }],
@@ -406,8 +477,94 @@ export function createAppStore() {
   return createStore<AppState>()(stateCreator);
 }
 
+export function migratePersistedState(persistedState: unknown): AppState {
+  const defaults = createInitialState();
+  const persisted = persistedState && typeof persistedState === 'object' ? persistedState as Partial<AppData> : {};
+  const units = (persisted.units ?? defaults.units).map((unit) => unit.id === 'u-sgcc' && unit.name === '国家电网公司'
+    ? defaults.units.find((item) => item.id === unit.id)!
+    : unit);
+  const legacyMockAccountNames: Record<string, string> = {
+    'user-tsinghua': '清华大学',
+    'user-pku': '北京大学',
+    'user-ict': '中科院计算所',
+    'user-hust': '华中科技大学',
+    'user-gxgrid': '广西电网公司',
+  };
+  const users = (persisted.users ?? defaults.users).map((user) => user.name === legacyMockAccountNames[user.id]
+    ? { ...user, name: defaults.users.find((item) => item.id === user.id)?.name ?? user.name }
+    : user);
+  const currentUser = persisted.currentUser ? users.find((user) => user.id === persisted.currentUser?.id) ?? persisted.currentUser : null;
+  const selfFundedProjects = (persisted.selfFundedProjects ?? defaults.selfFundedProjects).map((project) => project.implementingUnit === '国家电网公司'
+    ? { ...project, implementingUnit: '广西电网公司' }
+    : project);
+  const topics = persisted.topics ?? defaults.topics;
+  const nodes = persisted.nodes ?? defaults.nodes;
+  const finalNodeId = nodes.at(-1)?.id ?? defaults.nodes.at(-1)!.id;
+  const customDefinitions = (persisted.indicatorDefinitions ?? []).filter((item) => !item.builtIn);
+  const indicatorDefinitions = [...defaults.indicatorDefinitions, ...customDefinitions];
+  const oldPowerGridDefinitionId = 'indicator-power-grid-first-author';
+  const paperPowerGridDefinition = defaults.indicatorDefinitions.find((item) => item.code === 'POWER_GRID_FIRST_AUTHOR_PAPER')!;
+  const migratedIndicators = (persisted.topicIndicators ?? defaults.topicIndicators).map((item) => item.indicatorDefinitionId === oldPowerGridDefinitionId ? {
+    ...item,
+    id: item.id.replace(oldPowerGridDefinitionId, paperPowerGridDefinition.id),
+    indicatorDefinitionId: paperPowerGridDefinition.id,
+    achievementType: paperPowerGridDefinition.achievementType,
+  } : item);
+  const topicIndicators = [...migratedIndicators];
+  topics.forEach((topic) => {
+    indicatorDefinitions.filter((definition) => definition.enabled).forEach((definition) => {
+      if (topicIndicators.some((item) => item.topicId === topic.id && item.nodeId === finalNodeId && item.indicatorDefinitionId === definition.id)) return;
+      const quantity = topic.topicOverallRequirements[definition.id]
+        ?? topic.topicOverallRequirements[definition.name]
+        ?? (definition.name === definition.achievementType ? topic.topicOverallRequirements[definition.achievementType] : undefined)
+        ?? 0;
+      topicIndicators.push({
+        id: `topic-indicator-${topic.id}-${definition.id}-${finalNodeId}`,
+        projectId: topic.projectId,
+        topicId: topic.id,
+        indicatorDefinitionId: definition.id,
+        achievementType: definition.achievementType,
+        nodeId: finalNodeId,
+        targetQuantity: quantity,
+        status: '已下发',
+        version: 1,
+        publishedAt: new Date().toISOString(),
+        publishedBy: '系统升级迁移',
+        createdAt: today(),
+        updatedAt: today(),
+      });
+    });
+  });
+  const unitIndicatorAllocations = (persisted.unitIndicatorAllocations ?? defaults.unitIndicatorAllocations).map((item) => item.indicatorDefinitionId === oldPowerGridDefinitionId ? {
+    ...item,
+    id: item.id.replace(oldPowerGridDefinitionId, paperPowerGridDefinition.id),
+    topicIndicatorId: item.topicIndicatorId.replace(oldPowerGridDefinitionId, paperPowerGridDefinition.id),
+    indicatorDefinitionId: paperPowerGridDefinition.id,
+    achievementType: paperPowerGridDefinition.achievementType,
+  } : item);
+  const requiredTopicActions = ['topic.manage', 'indicator.manage', 'topic-indicator.publish'] as const;
+  const roles = (persisted.roles ?? defaults.roles).map((role) => role.name === '项目技术负责人' || role.name === '科研助理'
+    ? { ...role, actionPermissions: [...new Set([...role.actionPermissions, ...requiredTopicActions])] }
+    : role);
+
+  return {
+    ...defaults,
+    ...persisted,
+    units,
+    users,
+    currentUser,
+    topics,
+    nodes,
+    indicatorDefinitions,
+    topicIndicators,
+    unitIndicatorAllocations,
+    roles,
+    selfFundedProjects,
+  } as AppState;
+}
+
 export const useAppStore = create<AppState>()(
-  persist(stateCreator, { name: 'gzxm-research-management-v5', version: 5 }),
+  persist(stateCreator, { name: 'gzxm-research-management-v5', version: 7, migrate: migratePersistedState }),
 );
 
 export const canEditAchievement = (status: string): boolean => ['草稿', '退回修改', '预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(status);

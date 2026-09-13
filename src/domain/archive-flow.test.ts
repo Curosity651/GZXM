@@ -8,9 +8,9 @@ describe('归档业务流程', () => {
     expect(nextArchiveStatus('PROJECT_PUBLIC', '草稿', 'SUBMIT')).toBe('终审中');
   });
 
-  it('课题国家和自筹材料提交后先进入科研助理初审', () => {
-    expect(nextArchiveStatus('TOPIC_NATIONAL', '草稿', 'SUBMIT')).toBe('初审中');
-    expect(nextArchiveStatus('SELF_FUNDED', '草稿', 'SUBMIT')).toBe('初审中');
+  it('课题国家和自筹材料不经过审批直接归档', () => {
+    expect(nextArchiveStatus('TOPIC_NATIONAL', '草稿', 'SUBMIT')).toBe('已归档');
+    expect(nextArchiveStatus('SELF_FUNDED', '草稿', 'SUBMIT')).toBe('已归档');
   });
 
   it('条件材料选择不适用时必须填写理由', () => {
@@ -33,13 +33,10 @@ describe('归档 Store 流程', () => {
     expect(store.getState().selfFundedProjects.some((item) => item.id === 'sf-new')).toBe(true);
   });
 
-  it('课题材料完成两级审批后变为已通过', () => {
+  it('课题材料的旧提交入口保持直接归档', () => {
     const store = createAppStore();
     store.getState().saveArchiveSubmission({ id: 'as-new', requirementId: 'ar-topic-4', ownerType: 'TOPIC_NATIONAL', ownerId: 't1:u-tsinghua', topicId: 't1', unitId: 'u-tsinghua', applicability: 'APPLICABLE', status: '草稿', fileIds: ['file-1'], version: 1, updatedAt: '2026-09-09' }, 'user-tsinghua');
     store.getState().submitArchive('as-new', 'user-tsinghua');
-    expect(store.getState().archiveSubmissions.find((item) => item.id === 'as-new')?.status).toBe('初审中');
-    store.getState().reviewArchive('as-new', 'APPROVE_INITIAL', 'user-assistant', '材料完整');
-    store.getState().reviewArchive('as-new', 'APPROVE_FINAL', 'user-leader', '同意归档');
-    expect(store.getState().archiveSubmissions.find((item) => item.id === 'as-new')?.status).toBe('已通过');
+    expect(store.getState().archiveSubmissions.find((item) => item.id === 'as-new')?.status).toBe('已归档');
   });
 });

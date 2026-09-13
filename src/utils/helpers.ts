@@ -13,7 +13,7 @@ export const levelColor = (level: WarningLevel | null) => {
 
 export const statusOptions = ['草稿', '已发布', '已调整', '已停用'];
 
-export const paperTypeOptions: Array<'SCI' | 'EI' | '中文核心'> = ['SCI', 'EI', '中文核心'];
+export const paperTypeOptions = ['SCI', 'EI', 'CSCD', '其他', '无'] as const;
 export const patentScopeOptions: Array<'国内' | '国际'> = ['国内', '国际'];
 export const educationLevelOptions: Array<'博士' | '硕士'> = ['博士', '硕士'];
 

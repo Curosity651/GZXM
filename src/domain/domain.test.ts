@@ -23,8 +23,16 @@ describe('角色权限与课题数据范围', () => {
 });
 
 describe('成果审批状态机', () => {
-  it('正式终审通过后成果生效', () => {
+  it('非论文专利成果在正式终审通过后生效', () => {
     expect(nextAchievementStatus('正式终审中', 'APPROVE_FINAL')).toBe('已生效');
+  });
+
+  it('论文和专利正式终审后进入见刊或授权补充审批', () => {
+    expect(nextAchievementStatus('正式终审中', 'APPROVE_FINAL', '学术论文')).toBe('待见刊补充');
+    expect(nextAchievementStatus('正式终审中', 'APPROVE_FINAL', '发明专利')).toBe('待授权补充');
+    expect(nextAchievementStatus('待见刊补充', 'SUBMIT_SUPPLEMENT', '学术论文')).toBe('补充初审中');
+    expect(nextAchievementStatus('补充初审中', 'APPROVE_INITIAL', '学术论文')).toBe('补充终审中');
+    expect(nextAchievementStatus('补充终审中', 'APPROVE_FINAL', '学术论文')).toBe('已生效');
   });
 
   it('不允许跳过初审直接执行终审', () => {
@@ -43,18 +51,17 @@ describe('报告截止日期', () => {
 });
 
 describe('归档完成率', () => {
-  it('只统计必存和已确认适用的条件项，且仅终审通过算完成', () => {
+  it('国家和自筹材料按必存文件的实际上传数量计算完成率', () => {
     const requirements = [
-      { id: 'required', requirementKind: 'REQUIRED' },
-      { id: 'conditional-yes', requirementKind: 'CONDITIONAL' },
-      { id: 'conditional-no', requirementKind: 'CONDITIONAL' },
+      { id: 'required', ownerType: 'TOPIC_NATIONAL', requirementKind: 'REQUIRED', requiredQuantity: 1 },
+      { id: 'conditional-yes', ownerType: 'TOPIC_NATIONAL', requirementKind: 'CONDITIONAL', requiredQuantity: 1 },
+      { id: 'conditional-no', ownerType: 'TOPIC_NATIONAL', requirementKind: 'CONDITIONAL', requiredQuantity: 1 },
     ] as ArchiveRequirement[];
     const submissions = [
-      { requirementId: 'required', applicability: 'APPLICABLE', status: '已通过' },
-      { requirementId: 'conditional-yes', applicability: 'APPLICABLE', status: '初审中' },
-      { requirementId: 'conditional-no', applicability: 'NOT_APPLICABLE', status: '未提交', nonApplicableReason: '本项目不涉及' },
+      { requirementId: 'required', applicability: 'APPLICABLE', status: '草稿', fileIds: ['required-file'] },
+      { requirementId: 'conditional-yes', applicability: 'APPLICABLE', status: '草稿', fileIds: ['optional-file'] },
     ] as ArchiveSubmission[];
 
-    expect(archiveCompletion(requirements, submissions)).toEqual({ required: 2, completed: 1, rate: 50 });
+    expect(archiveCompletion(requirements, submissions)).toEqual({ required: 1, completed: 1, rate: 100 });
   });
 });
