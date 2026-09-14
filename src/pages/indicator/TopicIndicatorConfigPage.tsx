@@ -6,7 +6,8 @@ import type { IndicatorDefinition, Topic, TopicIndicator, TopicUnitMembership, U
 import { useAppStore } from '../../store';
 import { canPerform } from '../../domain/permissions';
 import { canAccessTopicByMembership, isGlobalUser, isTopicLead } from '../../domain/topic-access';
-import { validateTopicIndicators, validateUnitAllocations } from '../../domain/indicator-allocation';
+import { indicatorTargetDraftKey, validateTopicIndicators, validateUnitAllocations } from '../../domain/indicator-allocation';
+import { createDefaultTopicReportConfig } from '../../domain/reporting';
 
 const now = () => new Date().toISOString();
 const isUnitAccount = (account: User) => account.role === '内部课题单位' || account.role === '外部课题单位';
@@ -19,37 +20,32 @@ export function TopicIndicatorConfigPage() {
   const user = state.currentUser!;
   const isNew = topicId === 'new';
   const isViewMode = !isNew && searchParams.get('mode') === 'view';
+  const isAllocationMode = !isNew && searchParams.get('mode') === 'allocation';
   const existing = !isNew ? state.topics.find((topic) => topic.id === topicId) : undefined;
   const hasManageTopicPermission = canPerform(user, state.roles, 'topic.manage');
   const canManageTopic = hasManageTopicPermission && !isViewMode;
   const canPublishTopic = canPerform(user, state.roles, 'topic-indicator.publish') && !isViewMode;
   const canAllocate = canPerform(user, state.roles, 'unit-allocation.manage');
+  const canConfigureReports = canPerform(user, state.roles, 'report.rule.manage') && !isViewMode;
   const canAccessTopic = isNew ? hasManageTopicPermission : Boolean(existing && canAccessTopicByMembership(user, existing.id, state.topicMemberships));
   const [form] = Form.useForm<Partial<Topic>>();
-  const [requirements, setRequirements] = useState<Record<string, number>>(existing?.topicOverallRequirements ?? {});
+  const [targetDrafts, setTargetDrafts] = useState<Record<string, number>>({});
   const [nodeId, setNodeId] = useState(state.nodes.at(-1)?.id);
+  const [allocationNodeId, setAllocationNodeId] = useState(state.nodes.at(-1)?.id);
   const [allocationDraft, setAllocationDraft] = useState<Record<string, number>>({});
   const [reportModal, setReportModal] = useState(false);
-  const [reportConfig, setReportConfig] = useState(existing?.reportConfig ?? {
-    effectiveYear: new Date().getFullYear(),
-    monthlyEnabled: true,
-    monthlyOpenDay: 1,
-    monthlyDeadlineDay: 30,
-    quarterlyEnabled: true,
-    quarterlyOpenDay: 1,
-    quarterlyDeadlineDay: 10,
-    quarterlyMonths: [3, 6, 9, 12],
-  });
+  const [reportConfig, setReportConfig] = useState(existing?.reportConfig ?? createDefaultTopicReportConfig());
 
   const definitions = state.indicatorDefinitions.filter((item) => item.enabled);
   const memberships = state.topicMemberships.filter((item) => item.topicId === existing?.id);
   const activeMemberships = memberships.filter((item) => item.enabled);
   const isLead = Boolean(existing && isTopicLead(user, existing.id, state.topicMemberships));
-  const canEditAllocation = canAllocate && isLead && !isViewMode;
+  const isActiveTopic = existing?.enabled !== false && existing?.status !== '已暂停' && existing?.status !== '已结题';
+  const canEditAllocation = canAllocate && isLead && !isViewMode && isActiveTopic;
   const allocationMemberships = isLead || isGlobalUser(user)
     ? activeMemberships
     : activeMemberships.filter((item) => item.unitId === user.unitId);
-  const published = state.topicIndicators.filter((item) => item.topicId === existing?.id && item.status === '已下发');
+  const published = state.topicIndicators.filter((item) => item.topicId === existing?.id && item.nodeId === allocationNodeId && item.status === '已下发');
   const unitMap = Object.fromEntries(state.units.map((unit) => [unit.id, unit.name]));
   const initialLeadAccount = state.users.find((account) => account.enabled && account.unitId === existing?.leadingUnitId && isUnitAccount(account));
   const selectedLeadingUnitId = Form.useWatch('leadingUnitId', form) ?? existing?.leadingUnitId;
@@ -65,9 +61,12 @@ export function TopicIndicatorConfigPage() {
     : { status: '实施中', startDate: state.project.startDate, endDate: state.project.endDate, participatingUnitIds: [] };
 
   const valueForDefinition = (definition: IndicatorDefinition, current?: TopicIndicator) => {
-    if (requirements[definition.id] !== undefined) return requirements[definition.id];
+    if (nodeId) {
+      const draft = targetDrafts[indicatorTargetDraftKey(nodeId, definition.id)];
+      if (draft !== undefined) return draft;
+    }
     if (current) return current.targetQuantity;
-    return definition.name === definition.achievementType ? requirements[definition.achievementType] ?? 0 : 0;
+    return 0;
   };
   const targetRows = definitions.map((definition) => {
     const current = state.topicIndicators.find((item) => item.topicId === existing?.id && item.nodeId === nodeId && item.indicatorDefinitionId === definition.id);
@@ -107,8 +106,13 @@ export function TopicIndicatorConfigPage() {
     } as TopicIndicator;
   });
 
+  const overallRequirementsFromRows = (rows: TopicIndicator[]) => Object.fromEntries(
+    rows.map((row) => [row.indicatorDefinitionId, row.targetQuantity]),
+  );
+
   const commitTopic = (values: Partial<Topic>) => {
     const id = existing?.id ?? `topic-${Date.now()}`;
+    const rows = buildTopicIndicatorRows(id);
     const leadAccount = state.users.find((account) => account.enabled && account.unitId === values.leadingUnitId && isUnitAccount(account));
     if (!leadAccount) return message.warning('牵头单位没有可用账号，无法确认课题配置');
     const participantIds = (values.participatingUnitIds ?? []).filter((unitId) => unitId !== values.leadingUnitId);
@@ -125,8 +129,8 @@ export function TopicIndicatorConfigPage() {
       contactPhone: leadAccount.phone,
       contactEmail: leadAccount.email,
       domesticJournalRequiredCount: existing?.domesticJournalRequiredCount ?? 0,
-      topicOverallRequirements: requirements,
-      reportConfig,
+      topicOverallRequirements: overallRequirementsFromRows(rows),
+      reportConfig: canConfigureReports ? reportConfig : existing?.reportConfig,
     } as Topic;
 
     if (existing) state.updateTopic(id, topic, user.id);
@@ -147,7 +151,6 @@ export function TopicIndicatorConfigPage() {
       }, user.id);
     });
 
-    const rows = buildTopicIndicatorRows(id);
     state.saveTopicIndicators(rows, user.id);
     state.publishTopicIndicators(id, user.id);
     message.success('课题配置已确认并下发');
@@ -160,7 +163,7 @@ export function TopicIndicatorConfigPage() {
     const leadAccount = state.users.find((account) => account.enabled && account.unitId === values.leadingUnitId && isUnitAccount(account));
     if (!leadAccount) return message.warning('牵头单位没有可用账号，请先完成账号配置');
     const rows = buildTopicIndicatorRows(existing?.id ?? 'new-topic');
-    const issues = validateTopicIndicators(rows);
+    const issues = validateTopicIndicators(rows, state.topicIndicators, state.nodes, state.indicatorDefinitions);
     if (issues.length) return message.error(issues[0].message);
     Modal.confirm({
       title: '确认课题配置',
@@ -174,7 +177,7 @@ export function TopicIndicatorConfigPage() {
   const requestSaveTargets = () => {
     if (!existing || !nodeId || !canManageTopic || !canPublishTopic) return message.warning('当前账号没有确认总体指标的权限');
     const rows = buildTopicIndicatorRows(existing.id);
-    const issues = validateTopicIndicators(rows);
+    const issues = validateTopicIndicators(rows, state.topicIndicators, state.nodes, state.indicatorDefinitions);
     if (issues.length) return message.error(issues[0].message);
     Modal.confirm({
       title: '确认课题总体指标',
@@ -182,7 +185,7 @@ export function TopicIndicatorConfigPage() {
       okText: '确认并下发',
       cancelText: '取消',
       onOk: () => {
-        state.updateTopic(existing.id, { topicOverallRequirements: requirements }, user.id);
+        state.updateTopic(existing.id, { topicOverallRequirements: overallRequirementsFromRows(rows) }, user.id);
         state.saveTopicIndicators(rows, user.id);
         state.publishTopicIndicators(existing.id, user.id);
         message.success('课题总体指标已确认并下发');
@@ -190,12 +193,20 @@ export function TopicIndicatorConfigPage() {
     });
   };
 
-  const allocationValue = (indicator: TopicIndicator, membership: TopicUnitMembership) => allocationDraft[`allocation-${indicator.id}-${membership.unitId}`]
-    ?? state.unitIndicatorAllocations.find((item) => item.id === `allocation-${indicator.id}-${membership.unitId}`)?.targetQuantity
-    ?? 0;
+  const allocationValue = (indicator: TopicIndicator, membership: TopicUnitMembership) => {
+    const draft = allocationDraft[`allocation-${indicator.id}-${membership.unitId}`];
+    if (draft !== undefined) return draft;
+    const current = state.unitIndicatorAllocations.find((item) => item.id === `allocation-${indicator.id}-${membership.unitId}`);
+    if (current) return current.targetQuantity;
+    const selectedOrder = state.nodes.find((node) => node.id === indicator.nodeId)?.sortOrder ?? 0;
+    const previous = state.unitIndicatorAllocations
+      .filter((item) => item.topicId === indicator.topicId && item.unitId === membership.unitId && item.indicatorDefinitionId === indicator.indicatorDefinitionId && (state.nodes.find((node) => node.id === item.nodeId)?.sortOrder ?? 0) < selectedOrder)
+      .sort((left, right) => (state.nodes.find((node) => node.id === right.nodeId)?.sortOrder ?? 0) - (state.nodes.find((node) => node.id === left.nodeId)?.sortOrder ?? 0))[0];
+    return previous?.targetQuantity ?? 0;
+  };
 
   const requestSaveAllocations = () => {
-    if (!existing || !canEditAllocation) return message.warning('只有该课题牵头单位可以确认单位指标分配');
+    if (!existing || !allocationNodeId || !canEditAllocation) return message.warning('只有该课题牵头单位可以确认单位指标分配');
     const rows: UnitIndicatorAllocation[] = published.flatMap((indicator) => activeMemberships.map((membership) => {
       const id = `allocation-${indicator.id}-${membership.unitId}`;
       const old = state.unitIndicatorAllocations.find((item) => item.id === id);
@@ -218,7 +229,7 @@ export function TopicIndicatorConfigPage() {
         updatedAt: now(),
       };
     }));
-    const issues = validateUnitAllocations(published, rows, state.achievements);
+    const issues = validateUnitAllocations(published, rows, state.achievements, state.nodes, state.indicatorDefinitions);
     if (issues.length) return message.error(issues[0].message);
     Modal.confirm({
       title: '确认单位指标分配',
@@ -227,15 +238,16 @@ export function TopicIndicatorConfigPage() {
       cancelText: '取消',
       onOk: () => {
         state.saveUnitAllocations(rows, user.id);
-        state.publishUnitAllocations(existing.id, user.id);
+        state.publishUnitAllocations(existing.id, allocationNodeId!, user.id);
         message.success('单位指标分配已确认并下发');
       },
     });
   };
 
   const saveReportConfig = () => {
-    if (!canManageTopic) return message.warning('当前账号没有修改课题月季报配置的权限');
+    if (!canConfigureReports) return message.warning('当前账号没有修改课题月季报配置的权限');
     if (reportConfig.monthlyOpenDay > reportConfig.monthlyDeadlineDay || reportConfig.quarterlyOpenDay > reportConfig.quarterlyDeadlineDay) return message.warning('截止日不能早于开放日');
+    if (reportConfig.quarterlyEnabled && reportConfig.quarterlyMonths.length === 0) return message.warning('启用季报时至少选择一个季报月份');
     if (existing) state.updateTopic(existing.id, { reportConfig }, user.id);
     setReportModal(false);
     message.success(existing ? '月季报配置已保存' : '月季报配置已暂存');
@@ -247,7 +259,7 @@ export function TopicIndicatorConfigPage() {
   return <div className={`topic-indicator-editor ${isNew ? 'topic-editor-new' : ''}`}>
     <Space style={{ marginBottom: 18 }}>
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/indicator')}>返回课题列表</Button>
-      <Typography.Text type="secondary">{isNew ? '新建课题' : `${existing?.code}${isViewMode ? ' · 详情' : ' · 编辑'}`}</Typography.Text>
+      <Typography.Text type="secondary">{isNew ? '新建课题' : `${existing?.code}${isViewMode ? ' · 详情' : isAllocationMode ? ' · 单位指标分配' : ' · 编辑'}`}</Typography.Text>
     </Space>
 
     <Row gutter={18} align="top">
@@ -300,16 +312,16 @@ export function TopicIndicatorConfigPage() {
             columns={[
               { title: '指标名称', render: (_: unknown, row: (typeof targetRows)[number]) => <b>{row.definition.name}</b> },
               { title: '计量单位', width: 100, render: (_: unknown, row: (typeof targetRows)[number]) => row.definition.unit },
-              { title: '目标值', width: 130, render: (_: unknown, row: (typeof targetRows)[number]) => <InputNumber min={0} precision={0} disabled={!canPublishTopic} value={row.quantity} onChange={(value) => setRequirements({ ...requirements, [row.definition.id]: value ?? 0 })} /> },
+              { title: '目标值', width: 130, render: (_: unknown, row: (typeof targetRows)[number]) => <InputNumber min={0} precision={0} disabled={!canPublishTopic || !nodeId} value={row.quantity} onChange={(value) => nodeId && setTargetDrafts((drafts) => ({ ...drafts, [indicatorTargetDraftKey(nodeId, row.definition.id)]: value ?? 0 }))} /> },
               { title: '状态', width: 100, render: (_: unknown, row: (typeof targetRows)[number]) => row.current ? <Tag>{row.current.status}</Tag> : '未确认' },
             ]}
           />
-          {canManageTopic && <div style={{ marginTop: 12, textAlign: 'right' }}><Button onClick={() => setReportModal(true)}>课题月季报配置</Button></div>}
+          {canConfigureReports && <div style={{ marginTop: 12, textAlign: 'right' }}><Button onClick={() => setReportModal(true)}>课题月季报配置</Button></div>}
         </Card>
       </Col>
 
       {existing && <Col span={24}>
-        <Card title="单位指标分配" extra={canEditAllocation && <Button type="primary" onClick={requestSaveAllocations}>确认并下发</Button>}>
+        <Card title="单位指标分配" extra={<Space><span>考核节点</span><Select value={allocationNodeId} onChange={setAllocationNodeId} style={{ width: 180 }} options={state.nodes.map((node) => ({ label: node.name, value: node.id }))} />{canEditAllocation && <Button type="primary" disabled={!allocationNodeId || published.length === 0} onClick={requestSaveAllocations}>确认并下发</Button>}</Space>}>
           {!canEditAllocation && <Alert style={{ marginBottom: 12 }} type="info" showIcon message={isViewMode ? '当前为详情查看模式，所有内容均不可修改。' : isGlobalUser(user) ? '项目技术负责人和科研助理可查看分配结果，单位指标由课题牵头单位分配。' : '当前账号仅可查看本单位的指标分配。'} />}
           <Table
             size="small"
@@ -323,7 +335,7 @@ export function TopicIndicatorConfigPage() {
                 title: unitMap[membership.unitId],
                 render: (_: unknown, row: TopicIndicator) => <InputNumber min={0} precision={0} disabled={!canEditAllocation} value={allocationValue(row, membership)} onChange={(value) => setAllocationDraft({ ...allocationDraft, [`allocation-${row.id}-${membership.unitId}`]: value ?? 0 })} />,
               })),
-              { title: '课题目标', dataIndex: 'targetQuantity', width: 100 },
+              { title: '课题累计目标', dataIndex: 'targetQuantity', width: 120 },
             ]}
           />
         </Card>
@@ -337,7 +349,7 @@ export function TopicIndicatorConfigPage() {
         <Col span={8}><Typography.Text>启用季报</Typography.Text><div style={{ marginTop: 12 }}><Switch checked={reportConfig.quarterlyEnabled} onChange={(value) => setReportConfig({ ...reportConfig, quarterlyEnabled: value })} /></div></Col>
         <Col span={12} style={{ marginTop: 16 }}><Typography.Text>月报开放日 / 截止日</Typography.Text><Space style={{ marginTop: 8 }}><InputNumber min={1} max={31} value={reportConfig.monthlyOpenDay} onChange={(value) => setReportConfig({ ...reportConfig, monthlyOpenDay: value ?? 1 })} /><InputNumber min={1} max={31} value={reportConfig.monthlyDeadlineDay} onChange={(value) => setReportConfig({ ...reportConfig, monthlyDeadlineDay: value ?? 30 })} /></Space></Col>
         <Col span={12} style={{ marginTop: 16 }}><Typography.Text>季报开放日 / 截止日</Typography.Text><Space style={{ marginTop: 8 }}><InputNumber min={1} max={31} value={reportConfig.quarterlyOpenDay} onChange={(value) => setReportConfig({ ...reportConfig, quarterlyOpenDay: value ?? 1 })} /><InputNumber min={1} max={31} value={reportConfig.quarterlyDeadlineDay} onChange={(value) => setReportConfig({ ...reportConfig, quarterlyDeadlineDay: value ?? 10 })} /></Space></Col>
-        <Col span={24} style={{ marginTop: 16 }}><Typography.Text>季报月份</Typography.Text><Select mode="multiple" style={{ width: '100%', marginTop: 8 }} value={reportConfig.quarterlyMonths} onChange={(value) => setReportConfig({ ...reportConfig, quarterlyMonths: value })} options={Array.from({ length: 12 }, (_, index) => ({ label: `${index + 1} 月`, value: index + 1 }))} /></Col>
+        <Col span={24} style={{ marginTop: 16 }}><Typography.Text>季报月份</Typography.Text><Select mode="multiple" style={{ width: '100%', marginTop: 8 }} value={reportConfig.quarterlyMonths} onChange={(value) => setReportConfig({ ...reportConfig, quarterlyMonths: [...value].sort((left, right) => left - right) })} options={Array.from({ length: 12 }, (_, index) => ({ label: `${index + 1} 月`, value: index + 1 }))} /></Col>
       </Row>
     </Modal>
   </div>;

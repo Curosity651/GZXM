@@ -74,9 +74,11 @@ export function initialAchievementStatus(_type: AchievementType): AchievementWor
   return '预审草稿';
 }
 
-export function reviewActionFor(status: AchievementWorkflowStatus, role: UserRole): AchievementAction | null {
-  if (role === '科研助理' && (status === '预审初审中' || status === '正式初审中' || status === '补充初审中')) return 'APPROVE_INITIAL';
-  if (role === '项目技术负责人' && (status === '预审终审中' || status === '正式终审中' || status === '补充终审中')) return 'APPROVE_FINAL';
+export function reviewActionFor(status: AchievementWorkflowStatus, access: UserRole | { canInitial: boolean; canFinal: boolean }): AchievementAction | null {
+  const canInitial = typeof access === 'string' ? access === '科研助理' : access.canInitial;
+  const canFinal = typeof access === 'string' ? access === '项目技术负责人' : access.canFinal;
+  if (canInitial && (status === '预审初审中' || status === '正式初审中' || status === '补充初审中')) return 'APPROVE_INITIAL';
+  if (canFinal && (status === '预审终审中' || status === '正式终审中' || status === '补充终审中')) return 'APPROVE_FINAL';
   return null;
 }
 

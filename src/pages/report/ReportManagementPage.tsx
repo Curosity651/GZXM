@@ -1,33 +1,26 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, Col, Drawer, Form, Input, InputNumber, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, FileAddOutlined, RollbackOutlined, SearchOutlined, SendOutlined, UpOutlined } from '@ant-design/icons';
-import type { ProgressReport, ReportTask, ReportType, Topic, TopicReportConfig } from '../../types';
+import type { ProgressReport, ReportTask, ReportType } from '../../types';
 import type { ReportAction } from '../../domain/report-flow';
 import { useAppStore } from '../../store';
-import { isReportOverdue } from '../../domain/reporting';
+import { isReportOpen, isReportOverdue, topicReportWindow } from '../../domain/reporting';
 import { isReportEditable } from '../../domain/report-flow';
 import { canPerform } from '../../domain/permissions';
-import { accessibleTopics, isTopicLead } from '../../domain/topic-access';
+import { accessibleTopics, isTopicLead, isTopicOperational } from '../../domain/topic-access';
 import { StatusTag } from '../../components/common/StatusTag';
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
 import { ReportForm } from '../../components/report/ReportForm';
 
 const { Text } = Typography;
 const today = () => new Date().toISOString().slice(0, 10);
-interface NewReportValues { topicId: string; reportType: ReportType; year: number; period: number; deadline: string }
-
-function configuredDeadline(topic: Topic & { reportConfig?: TopicReportConfig }, type: ReportType, year: number, period: number): string {
-  const month = type === 'MONTHLY' ? period : topic.reportConfig?.quarterlyMonths[period - 1] ?? period * 3;
-  const preferredDay = type === 'MONTHLY' ? topic.reportConfig?.monthlyDeadlineDay ?? 30 : topic.reportConfig?.quarterlyDeadlineDay ?? 10;
-  const day = Math.min(preferredDay, new Date(Date.UTC(year, month, 0)).getUTCDate());
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
+interface NewReportValues { topicId: string; reportType: ReportType; year: number; period: number }
 
 export function ReportManagementPage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const topics = accessibleTopics(user, state.topics, state.topicMemberships);
-  const leadTopics = topics.filter((topic) => isTopicLead(user, topic.id, state.topicMemberships));
+  const leadTopics = topics.filter((topic) => isTopicOperational(topic) && isTopicLead(user, topic.id, state.topicMemberships));
   const canSubmit = canPerform(user, state.roles, 'report.submit');
   const canInitial = canPerform(user, state.roles, 'report.initial.approve');
   const canFinal = canPerform(user, state.roles, 'report.final.approve');
@@ -63,39 +56,57 @@ export function ReportManagementPage() {
     returned: baseRecords.filter(({ report }) => report.status === '退回修改').length,
     overdue: baseRecords.filter(({ report, task }) => isReportOverdue(task.deadline, report.submittedAt)).length,
   };
-  const passRate = stats.total ? Math.round(stats.approved / stats.total * 100) : 0;
+  const submittedCount = baseRecords.filter(({ report }) => report.status !== '草稿').length;
+  const passRate = submittedCount ? Math.round(stats.approved / submittedCount * 100) : 0;
 
   const reviewAction = (report: ProgressReport | null): ReportAction | null => {
+    if (!report || !isTopicOperational(state.topics.find((topic) => topic.id === report.topicId))) return null;
     if (report?.status === '初审中' && canInitial) return 'APPROVE_INITIAL';
     if (report?.status === '终审中' && canFinal) return 'APPROVE_FINAL';
     return null;
   };
-  const editable = Boolean(editingTask && canSubmit && isTopicLead(user, editingTask.topicId, state.topicMemberships) && (!editingReport || isReportEditable(editingReport.status)));
+  const editable = Boolean(editingTask && isTopicOperational(state.topics.find((topic) => topic.id === editingTask.topicId)) && isReportOpen(editingTask) && canSubmit && isTopicLead(user, editingTask.topicId, state.topicMemberships) && (!editingReport || isReportEditable(editingReport.status)));
   const openRecord = (task: ReportTask, report: ProgressReport) => { setEditingTask(task); setEditingReport(report); form.setFieldsValue(report); setDrawer(true); };
   const prepareNew = () => { const date = new Date(); newForm.resetFields(); newForm.setFieldsValue({ reportType: 'MONTHLY', year: date.getFullYear(), period: date.getMonth() + 1 }); setNewOpen(true); };
-  const refreshDeadline = () => {
-    const values = newForm.getFieldsValue();
-    const topic = leadTopics.find((item) => item.id === values.topicId);
-    if (topic && values.reportType && values.year && values.period) newForm.setFieldValue('deadline', configuredDeadline(topic, values.reportType, values.year, values.period));
-  };
+  const watchedNewValues = Form.useWatch([], newForm) as Partial<NewReportValues> | undefined;
+  const selectedTopic = leadTopics.find((item) => item.id === watchedNewValues?.topicId);
+  let selectedWindow: { openDate: string; deadline: string } | undefined;
+  if (selectedTopic?.reportConfig && watchedNewValues?.reportType && watchedNewValues.year && watchedNewValues.period) {
+    try {
+      selectedWindow = topicReportWindow(selectedTopic.reportConfig, watchedNewValues.reportType, watchedNewValues.year, watchedNewValues.period);
+    } catch {
+      selectedWindow = undefined;
+    }
+  }
   const createReport = async () => {
     const values = await newForm.validateFields();
     const topic = leadTopics.find((item) => item.id === values.topicId);
     if (!topic) return message.warning('只有课题牵头单位可以新建月季报');
-    if (values.reportType === 'QUARTERLY' && values.period > 4) return message.warning('季报期次只能填写 1 至 4');
-    if (values.reportType === 'MONTHLY' && topic.reportConfig?.monthlyEnabled === false) return message.warning('该课题未启用月报');
-    if (values.reportType === 'QUARTERLY' && topic.reportConfig?.quarterlyEnabled === false) return message.warning('该课题未启用季报');
+    if (topic.enabled === false || topic.status === '已暂停' || topic.status === '已结题') return message.warning('当前课题已停用，不能新建月季报');
+    if (!topic.reportConfig) return message.warning('该课题尚未配置月季报规则');
+    let window: { openDate: string; deadline: string };
+    try {
+      window = topicReportWindow(topic.reportConfig, values.reportType, values.year, values.period);
+    } catch (error) {
+      return message.warning(error instanceof Error ? error.message : '月季报规则配置不正确');
+    }
     const oldTask = state.reportTasks.find((task) => task.topicId === values.topicId && task.reportType === values.reportType && task.year === values.year && task.period === values.period);
     const oldReport = oldTask && state.reports.find((report) => report.taskId === oldTask.id);
     if (oldTask && oldReport) { setNewOpen(false); openRecord(oldTask, oldReport); return message.info('该期报告已经存在'); }
-    const id = oldTask?.id ?? `report-task-manual-${values.topicId}-${values.reportType}-${values.year}-${values.period}`;
-    const task: ReportTask = { id, topicId: values.topicId, reportType: values.reportType, year: values.year, period: values.period, openDate: today(), deadline: values.deadline, ruleId: 'manual' };
-    state.saveReportTask(task); setEditingTask(task); setEditingReport(null); form.resetFields(); setNewOpen(false); setDrawer(true);
+    const id = oldTask?.id ?? `report-task-${values.reportType === 'MONTHLY' ? 'm' : 'q'}-${values.topicId}-${values.year}-${values.period}`;
+    const task: ReportTask = { id, topicId: values.topicId, reportType: values.reportType, year: values.year, period: values.period, ...window };
+    if (!isReportOpen(task)) return message.warning(`该报告将于 ${task.openDate} 开放填报`);
+    try {
+      state.saveReportTask(task, user.id);
+    } catch (error) {
+      return message.warning(error instanceof Error ? error.message : '无法新建月季报');
+    }
+    setEditingTask(task); setEditingReport(null); form.resetFields(); setNewOpen(false); setDrawer(true);
   };
   const save = async (): Promise<string> => {
     const values = await form.validateFields(); const task = editingTask!;
-    const report: ProgressReport = { id: editingReport?.id ?? `report-${Date.now()}`, taskId: task.id, topicId: task.topicId, reportType: task.reportType, milestoneProgress: values.milestoneProgress!, overallProgress: values.overallProgress!, demonstrationProgress: values.demonstrationProgress!, fundUsage: values.fundUsage!, nextPlan: values.nextPlan!, problemsAndMeasures: values.problemsAndMeasures!, status: editingReport?.status === '退回修改' ? '退回修改' : '草稿', overdue: isReportOverdue(task.deadline, editingReport?.submittedAt), version: editingReport?.version ?? 1, submittedAt: editingReport?.submittedAt, updatedAt: today() };
-    state.saveReport(report); setEditingReport(report); message.success('报告草稿已保存'); return report.id;
+    const report: ProgressReport = { id: editingReport?.id ?? `report-${Date.now()}`, taskId: task.id, topicId: task.topicId, reportType: task.reportType, milestoneProgress: values.milestoneProgress!, overallProgress: values.overallProgress!, demonstrationProgress: values.demonstrationProgress!, fundUsage: values.fundUsage!, nextPlan: values.nextPlan!, problemsAndMeasures: values.problemsAndMeasures!, status: editingReport?.status === '退回修改' ? '退回修改' : '草稿', overdue: isReportOverdue(task.deadline, editingReport?.submittedAt), recordVersion: editingReport?.recordVersion ?? 0, submittedVersion: editingReport?.submittedVersion ?? 0, submittedAt: editingReport?.submittedAt, updatedAt: today() };
+    state.saveReport(report, user.id); setEditingReport(useAppStore.getState().reports.find((item) => item.id === report.id) ?? report); message.success('报告草稿已保存'); return report.id;
   };
   const submit = async () => { const id = await save(); state.submitReport(id, user.id); message.success('报告已提交科研助理初审'); setDrawer(false); };
   const confirmReview = () => {
@@ -114,8 +125,8 @@ export function ReportManagementPage() {
       <Space size={10} style={{ marginLeft: 'auto' }}><Button type="primary" icon={<SearchOutlined />}>查询</Button><Button onClick={() => { setScope(canReview ? 'pending' : 'all'); setTopicId(undefined); setType(undefined); setYear(undefined); setPeriod(undefined); setStatus(undefined); }}>重置</Button><Button type="link" icon={expanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setExpanded(!expanded)}>{expanded ? '收起' : '展开'}</Button></Space>
     </div></Card>
     <Card title="月季报进度" style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
-      {[['报告总数', stats.total], ['草稿', stats.draft], ['审核中', stats.reviewing], ['已通过', stats.approved], ['退回修改', stats.returned], ['逾期', stats.overdue]].map(([label, value]) => <Col flex="1 1 140px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
-      <Col flex="1 1 220px"><Text type="secondary">通过率</Text><Progress percent={passRate} status={passRate >= 100 ? 'success' : 'active'} /></Col>
+      {[["已发起报告", stats.total], ['草稿', stats.draft], ['审核中', stats.reviewing], ['已通过', stats.approved], ['退回修改', stats.returned], ['逾期', stats.overdue]].map(([label, value]) => <Col flex="1 1 140px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
+      <Col flex="1 1 220px"><Text type="secondary">审批通过率</Text><Progress percent={passRate} status={passRate >= 100 ? 'success' : 'active'} /></Col>
     </Row></Card>
     <Card title={`月季报列表（${visibleRows.length}）`} extra={canSubmit && leadTopics.length > 0 && <Button type="primary" icon={<FileAddOutlined />} onClick={prepareNew}>新建月季报</Button>}><Table rowKey={({ report }) => report.id} dataSource={visibleRows} columns={[
       { title: '报告', render: (_, { report }) => <Space><Tag color={report.reportType === 'MONTHLY' ? 'blue' : 'purple'}>{report.reportType === 'MONTHLY' ? '月报' : '季报'}</Tag><Text strong>{state.topics.find((topic) => topic.id === report.topicId)?.name}</Text></Space> },
@@ -127,9 +138,9 @@ export function ReportManagementPage() {
       { title: '时效', width: 80, render: (_, { task, report }) => isReportOverdue(task.deadline, report.submittedAt) ? <Tag color="red">逾期</Tag> : <Tag color="green">正常</Tag> },
       { title: '操作', width: 120, render: (_, { task, report }) => <Button type="link" icon={isReportEditable(report.status) ? <EditOutlined /> : <EyeOutlined />} onClick={() => openRecord(task, report)}>{reviewAction(report) ? '审批' : canSubmit && isTopicLead(user, task.topicId, state.topicMemberships) && isReportEditable(report.status) ? '编辑' : '详情'}</Button> },
     ]} /></Card>
-    <Modal title="新建月季报" open={newOpen} onCancel={() => setNewOpen(false)} onOk={createReport} okText="开始填报"><Form form={newForm} layout="vertical"><Form.Item label="所属课题" name="topicId" rules={[{ required: true }]}><Select options={leadTopics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} onChange={refreshDeadline} /></Form.Item><Row gutter={12}><Col span={8}><Form.Item label="报告类型" name="reportType" rules={[{ required: true }]}><Select options={[{ label: '月报', value: 'MONTHLY' }, { label: '季报', value: 'QUARTERLY' }]} onChange={refreshDeadline} /></Form.Item></Col><Col span={8}><Form.Item label="年度" name="year" rules={[{ required: true }]}><InputNumber min={2020} max={2100} style={{ width: '100%' }} onChange={refreshDeadline} /></Form.Item></Col><Col span={8}><Form.Item label="期次" name="period" rules={[{ required: true }]}><InputNumber min={1} max={12} style={{ width: '100%' }} onChange={refreshDeadline} /></Form.Item></Col></Row><Form.Item label="提交截止日期" name="deadline" rules={[{ required: true }]}><Input type="date" /></Form.Item></Form></Modal>
+    <Modal title="新建月季报" open={newOpen} onCancel={() => setNewOpen(false)} onOk={createReport} okText="开始填报"><Form form={newForm} layout="vertical"><Form.Item label="所属课题" name="topicId" rules={[{ required: true }]}><Select options={leadTopics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Form.Item><Row gutter={12}><Col span={8}><Form.Item label="报告类型" name="reportType" rules={[{ required: true }]}><Select options={[{ label: '月报', value: 'MONTHLY' }, { label: '季报', value: 'QUARTERLY' }]} /></Form.Item></Col><Col span={8}><Form.Item label="年度" name="year" rules={[{ required: true }]}><InputNumber min={2020} max={2100} style={{ width: '100%' }} /></Form.Item></Col><Col span={8}><Form.Item label="期次" name="period" rules={[{ required: true }]}><InputNumber min={1} max={watchedNewValues?.reportType === 'QUARTERLY' ? selectedTopic?.reportConfig?.quarterlyMonths.length ?? 4 : 12} style={{ width: '100%' }} /></Form.Item></Col></Row><Row gutter={12}><Col span={12}><Form.Item label="开放日期"><Input value={selectedWindow?.openDate} placeholder="选择完整信息后自动计算" readOnly /></Form.Item></Col><Col span={12}><Form.Item label="截止日期"><Input value={selectedWindow?.deadline} placeholder="选择完整信息后自动计算" readOnly /></Form.Item></Col></Row></Form></Modal>
     <Drawer width={780} title={editingTask?.reportType === 'MONTHLY' ? '课题月报' : '课题季报'} open={drawer} onClose={() => setDrawer(false)} extra={editable ? <Space><Button onClick={save}>保存草稿</Button><Button type="primary" icon={<SendOutlined />} onClick={submit}>提交初审</Button></Space> : reviewAction(editingReport) ? <Space><Button danger icon={<RollbackOutlined />} onClick={() => setDecision('return')}>退回修改</Button><Button type="primary" icon={<CheckOutlined />} onClick={() => setDecision('approve')}>审批通过</Button></Space> : undefined}>
-      {editingTask && <Space style={{ marginBottom: 16 }}><Text strong>{state.topics.find((topic) => topic.id === editingTask.topicId)?.name}</Text><Tag>{editingTask.deadline} 截止</Tag>{editingReport && <StatusTag status={editingReport.status} />}</Space>}
+      {editingTask && <Space style={{ marginBottom: 16 }}><Text strong>{state.topics.find((topic) => topic.id === editingTask.topicId)?.name}</Text><Tag>{editingTask.deadline} 截止</Tag>{editingReport && <><StatusTag status={editingReport.status} /><Tag>记录 V{editingReport.recordVersion ?? 1}</Tag><Tag color="blue">提交 V{editingReport.submittedVersion ?? 0}</Tag></>}</Space>}
       <ReportForm form={form} disabled={!editable} />
       {editingReport && <Card title="审批记录" size="small" style={{ marginTop: 16 }}><ApprovalTimeline records={state.approvalRecords.filter((item) => item.businessId === editingReport.id)} users={state.users} /></Card>}
     </Drawer>

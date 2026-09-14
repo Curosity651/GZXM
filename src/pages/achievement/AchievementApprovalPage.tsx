@@ -4,7 +4,8 @@ import { CheckOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons'
 import type { Achievement } from '../../types';
 import { useAppStore } from '../../store';
 import { reviewActionFor } from '../../domain/achievement';
-import { canViewAchievement } from '../../domain/topic-access';
+import { canPerform } from '../../domain/permissions';
+import { canViewAchievement, isTopicOperational } from '../../domain/topic-access';
 import { StatusTag } from '../../components/common/StatusTag';
 import { AchievementDetail } from '../../components/achievement/AchievementDetail';
 
@@ -19,6 +20,8 @@ export function AchievementApprovalPage() {
   const [detail, setDetail] = useState<Achievement | null>(null);
   const [opinion, setOpinion] = useState('');
   const [decision, setDecision] = useState<'approve' | 'return' | null>(null);
+  const reviewAccess = { canInitial: canPerform(user, state.roles, 'achievement.initial.approve'), canFinal: canPerform(user, state.roles, 'achievement.final.approve') };
+  const reviewAction = (item: Achievement) => isTopicOperational(state.topics.find((topic) => topic.id === item.topicId)) ? reviewActionFor(item.status as never, reviewAccess) : null;
 
   const visible = useMemo(() => state.achievements.filter((item) => canViewAchievement(user, item, state.topicMemberships)), [state.achievements, state.topicMemberships, user]);
   const stageRows = visible.filter((item) => stage === 'pre'
@@ -28,8 +31,8 @@ export function AchievementApprovalPage() {
       : item.status.includes('补充') || item.status === '已生效');
   const approvalStage = stage === 'pre' ? 'PRE_REVIEW' : stage === 'formal' ? 'FORMAL' : 'SUPPLEMENT';
   const processedIds = new Set(state.approvalRecords.filter((item) => item.businessType === 'ACHIEVEMENT' && item.operatorId === user.id && item.stage === approvalStage).map((item) => item.businessId));
-  const rows = stageRows.filter((item) => scope === '待我审批' ? Boolean(reviewActionFor(item.status as never, user.role)) : scope === '已审批' ? processedIds.has(item.id) : true);
-  const currentAction = detail ? reviewActionFor(detail.status as never, user.role) : null;
+  const rows = stageRows.filter((item) => scope === '待我审批' ? Boolean(reviewAction(item)) : scope === '已审批' ? processedIds.has(item.id) : true);
+  const currentAction = detail ? reviewAction(detail) : null;
 
   const confirmDecision = () => {
     if (!detail || !currentAction || !decision) return;
@@ -54,7 +57,7 @@ export function AchievementApprovalPage() {
         { title: '当前环节', width: 150, render: (_, row) => stageLabel(row) },
         { title: '状态', dataIndex: 'status', width: 140, render: (value) => <StatusTag status={value} /> },
         { title: '提交时间', dataIndex: 'submittedAt', width: 120, render: (value) => value?.slice(0, 10) ?? '—' },
-        { title: '操作', width: 110, render: (_, row) => <Button type="link" icon={<EyeOutlined />} onClick={() => setDetail(row)}>{reviewActionFor(row.status as never, user.role) ? '审批' : '查看'}</Button> },
+        { title: '操作', width: 110, render: (_, row) => <Button type="link" icon={<EyeOutlined />} onClick={() => setDetail(row)}>{reviewAction(row) ? '审批' : '查看'}</Button> },
       ]} />
     </Card>
     <Drawer width={920} title="成果审批详情" open={Boolean(detail)} onClose={() => setDetail(null)} extra={currentAction && <Space><Button danger icon={<RollbackOutlined />} onClick={() => setDecision('return')}>退回修改</Button><Button type="primary" icon={<CheckOutlined />} onClick={() => setDecision('approve')}>审批通过</Button></Space>}>

@@ -1,11 +1,11 @@
 import type {
   Achievement, AchievementMaterial, ArchiveCategory, ArchiveMaterial, ArchiveRequirement,
   IndicatorConfig, Project, ProjectUnit, ApprovalRecord, ReportTask, ProgressReport,
-  SelfFundedProject, ArchiveSubmission, TimeNode, Topic, WarningRule, User, RbacRole, ReportSubmissionRule,
+  SelfFundedProject, ArchiveSubmission, TimeNode, Topic, WarningRule, User, RbacRole,
   IndicatorDefinition, TopicIndicator, TopicUnitMembership, UnitIndicatorAllocation,
 } from '../types';
 import { ALL_PAGE_PERMISSIONS } from '../domain/permissions';
-import { generateReportTasks } from '../domain/reporting';
+import { createDefaultTopicReportConfig } from '../domain/reporting';
 
 export const MOCK_PROJECT: Project = { id: 'p1', name: '国家科技重大专项示范', code: 'GZ-2025-001', startDate: '2025-01-01', endDate: '2028-12-31' };
 
@@ -25,7 +25,7 @@ export const MOCK_TOPICS: Topic[] = [
   { id: 't3', projectId: 'p1', code: 'K3', name: '课题3：系统平台研发', leadingUnitId: 'u-ict', participatingUnitIds: ['u-hust', 'u-zju', 'u-sgcc'], principalName: '孙七', contactName: '周八', contactPhone: '13800003333', contactEmail: 'zhouba@ict.ac.cn', financeAssistant: '陈助理', financeAssistantEmail: 'chen@ict.ac.cn', financeAssistantPhone: '13800003334', domesticJournalRequiredCount: 1, topicOverallRequirements: { 学术论文: 3, 发明专利: 4, 软件著作权: 4, 标准规范: 0, 人才培养: 0 } },
   { id: 't4', projectId: 'p1', code: 'K4', name: '课题4：示范应用与集成', leadingUnitId: 'u-sgcc', participatingUnitIds: ['u-tsinghua', 'u-hust', 'u-nari'], principalName: '吴九', contactName: '郑十', contactPhone: '13800004444', contactEmail: 'zhengshi@sgcc.com.cn', financeAssistant: '杨助理', financeAssistantEmail: 'yang@sgcc.com.cn', financeAssistantPhone: '13800004445', domesticJournalRequiredCount: 0, topicOverallRequirements: { 学术论文: 2, 发明专利: 3, 软件著作权: 2, 标准规范: 0, 人才培养: 0 } },
   { id: 't5', projectId: 'p1', code: 'K5', name: '课题5：测试评估与标准规范', leadingUnitId: 'u-hust', participatingUnitIds: ['u-pku', 'u-ict'], principalName: '钱十一', contactName: '刘十二', contactPhone: '13800005555', contactEmail: 'liushier@hust.edu.cn', financeAssistant: '黄助理', financeAssistantEmail: 'huang@hust.edu.cn', financeAssistantPhone: '13800005556', domesticJournalRequiredCount: 1, topicOverallRequirements: { 学术论文: 2, 发明专利: 2, 软件著作权: 2, 标准规范: 2, 人才培养: 0 } },
-];
+].map((topic) => ({ ...topic, reportConfig: createDefaultTopicReportConfig(2026) }));
 
 export const MOCK_TIME_NODES: TimeNode[] = [
   { id: 'node-1', projectId: 'p1', name: '第一年度', deadline: '2025-12-31', description: '第一年度检查', participatesInWarning: true, sortOrder: 1 },
@@ -307,12 +307,9 @@ export const MOCK_ARCHIVE_MATERIALS: ArchiveMaterial[] = [
 
 export const MOCK_APPROVAL_RECORDS: ApprovalRecord[] = [];
 
-export const MOCK_REPORT_RULES: ReportSubmissionRule[] = [
-  { id: 'report-rule-monthly', reportType: 'MONTHLY', enabled: true, effectiveYear: 2026, openDay: 20, deadlineDay: 30, quarterlyMonths: [], updatedAt: '2026-01-01', updatedBy: '科研助理（董）' },
-  { id: 'report-rule-quarterly', reportType: 'QUARTERLY', enabled: true, effectiveYear: 2026, openDay: 1, deadlineDay: 10, quarterlyMonths: [3, 6, 9, 12], updatedAt: '2026-01-01', updatedBy: '科研助理（董）' },
+export const MOCK_REPORT_TASKS: ReportTask[] = [
+  { id: 'report-task-m-t1-2026-9', topicId: 't1', reportType: 'MONTHLY', year: 2026, period: 9, openDate: '2026-09-01', deadline: '2026-09-30' },
 ];
-
-export const MOCK_REPORT_TASKS: ReportTask[] = generateReportTasks(MOCK_TOPICS, MOCK_REPORT_RULES);
 
 export const MOCK_REPORTS: ProgressReport[] = [
   {

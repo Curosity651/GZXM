@@ -21,12 +21,16 @@ describe('报告状态规则', () => {
 describe('报告两级审批', () => {
   it('课题牵头单位可以保存并提交本课题报告', () => {
     const store = createAppStore();
+    store.getState().saveReportTask({
+      id: 'report-task-q-t1', topicId: 't1', reportType: 'QUARTERLY', year: 2026, period: 3,
+      openDate: '2026-09-01', deadline: '2026-09-10',
+    }, 'user-tsinghua');
     store.getState().saveReport({
       id: 'report-new', taskId: 'report-task-q-t1', topicId: 't1', reportType: 'QUARTERLY',
       milestoneProgress: '完成里程碑', overallProgress: '总体正常', demonstrationProgress: '完成调研',
       fundUsage: '按计划执行', nextPlan: '继续联调', problemsAndMeasures: '无', status: '草稿',
       overdue: false, version: 1, updatedAt: '2026-09-09',
-    });
+    }, 'user-tsinghua');
     store.getState().submitReport('report-new', 'user-tsinghua');
     expect(store.getState().reports.find((item) => item.id === 'report-new')?.status).toBe('初审中');
   });

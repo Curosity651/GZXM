@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Modal, Space, Table, Tag, Upload, message } from 'antd';
 import { DeleteOutlined, DownloadOutlined, EyeOutlined, FileOutlined, UploadOutlined } from '@ant-design/icons';
-import type { ArchiveOwnerType } from '../../domain/archive-flow';
+import type { ArchiveOwnerType } from '../../domain/archive';
 import type { ArchiveRequirement, ArchiveSubmission, ArchiveSubmissionFile } from '../../types';
 import { useAppStore } from '../../store';
 

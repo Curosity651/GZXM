@@ -1,5 +1,7 @@
 import type { ArchiveRequirement, ArchiveSubmission } from '../types';
 
+export type ArchiveOwnerType = 'PROJECT_PUBLIC' | 'TOPIC_NATIONAL' | 'SELF_FUNDED';
+
 export interface ArchiveCompletion {
   required: number;
   completed: number;
@@ -36,6 +38,23 @@ export function archiveCompletion(
     completed,
     rate: required === 0 ? 100 : Math.round((completed / required) * 100),
   };
+}
+
+export function topicArchiveRequirements(
+  requirements: ArchiveRequirement[],
+  topicId: string,
+  unitId: string,
+): ArchiveRequirement[] {
+  return requirements.filter((requirement) => {
+    if (requirement.ownerType !== 'TOPIC_NATIONAL' || requirement.templateId) return false;
+    if (requirement.topicId && requirement.topicId !== topicId) return false;
+    const isCustomFolder = !requirement.sourceCode;
+    return !isCustomFolder || (requirement.topicId === topicId && requirement.unitId === unitId);
+  });
+}
+
+export function validateApplicability(applicability: 'PENDING' | 'APPLICABLE' | 'NOT_APPLICABLE', reason?: string): boolean {
+  return applicability !== 'NOT_APPLICABLE' || Boolean(reason?.trim());
 }
 
 export function validateNonApplicable(submission: Pick<ArchiveSubmission, 'applicability' | 'nonApplicableReason'>): boolean {

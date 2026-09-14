@@ -63,7 +63,6 @@ const actionPermissions: Record<ActionKey, UserRole[]> = {
   'topic-unit.manage': ['内部课题单位', '外部课题单位'],
   'unit-allocation.manage': ['内部课题单位', '外部课题单位'],
   'unit-allocation.publish': ['内部课题单位', '外部课题单位'],
-  'warning.manage': [],
   'achievement.submit': ['内部课题单位', '外部课题单位'],
   'achievement.initial.approve': ['科研助理'],
   'achievement.final.approve': ['项目技术负责人'],
@@ -71,10 +70,7 @@ const actionPermissions: Record<ActionKey, UserRole[]> = {
   'report.initial.approve': ['科研助理'],
   'report.final.approve': ['项目技术负责人'],
   'report.rule.manage': ['科研助理'],
-  'archive.public.submit': ['科研助理'],
   'archive.topic.submit': ['内部课题单位', '外部课题单位'],
-  'archive.initial.approve': ['科研助理'],
-  'archive.final.approve': ['项目技术负责人'],
   'self-funded.manage': ['内部课题单位'],
   'system.manage': ['系统管理员'],
 };
@@ -91,14 +87,13 @@ export function canViewPage(userOrRole: User | UserRole, rolesOrPage: RbacRole[]
   if (typeof userOrRole === 'string') {
     if (rolesOrPage === 'archive-monitoring' && !['科研助理', '项目技术负责人'].includes(userOrRole)) return false;
     if (userOrRole === '外部课题单位' && rolesOrPage === 'self-funded-archive') return false;
-    if ((userOrRole === '科研助理' || userOrRole === '项目技术负责人') && (rolesOrPage === 'achievement-entry' || rolesOrPage === 'report-management')) return true;
     const allowed = pagePermissions[userOrRole];
     return allowed === 'ALL' || Boolean(allowed?.includes(rolesOrPage as PageKey));
   }
   if (pageArg === 'archive-monitoring' && !['科研助理', '项目技术负责人'].includes(userOrRole.role)) return false;
+  if (!userOrRole.enabled) return false;
   const role = getRole(userOrRole, rolesOrPage as RbacRole[]);
   if (userOrRole.role === '外部课题单位' && pageArg === 'self-funded-archive') return false;
-  if ((userOrRole.role === '科研助理' || userOrRole.role === '项目技术负责人') && (pageArg === 'achievement-entry' || pageArg === 'report-management')) return Boolean(role?.enabled);
   return Boolean(role?.enabled && (role.builtIn || role.pagePermissions.includes(pageArg!)));
 }
 
@@ -109,6 +104,7 @@ export function canPerform(userOrRole: User | UserRole, rolesOrAction: RbacRole[
     if (userOrRole === '外部课题单位' && rolesOrAction === 'self-funded.manage') return false;
     return actionPermissions[rolesOrAction as ActionKey]?.includes(userOrRole) ?? false;
   }
+  if (!userOrRole.enabled) return false;
   if (userOrRole.role === '外部课题单位' && actionArg === 'self-funded.manage') return false;
   const role = getRole(userOrRole, rolesOrAction as RbacRole[]);
   return Boolean(role?.enabled && role.actionPermissions.includes(actionArg!));

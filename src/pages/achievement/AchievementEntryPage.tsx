@@ -6,7 +6,7 @@ import { useAppStore } from '../../store';
 import { aggregateAchievementProgress, achievementMatchesIndicator, initialAchievementStatus, isEditableAchievementStatus, reviewActionFor } from '../../domain/achievement';
 import { formalMaterialRequirements, supplementMaterialRequirements } from '../../domain/achievement-materials';
 import { canPerform } from '../../domain/permissions';
-import { accessibleTopics, canViewAchievement, membershipForUser } from '../../domain/topic-access';
+import { accessibleTopics, canViewAchievement, isTopicOperational, membershipForUser } from '../../domain/topic-access';
 import { StatusTag } from '../../components/common/StatusTag';
 import { AchievementForm } from '../../components/achievement/AchievementForm';
 import { AchievementDetail } from '../../components/achievement/AchievementDetail';
@@ -22,7 +22,9 @@ export function AchievementEntryPage() {
   const user = state.currentUser!;
   const topics = accessibleTopics(user, state.topics, state.topicMemberships);
   const canSubmit = canPerform(user, state.roles, 'achievement.submit');
-  const canReview = canPerform(user, state.roles, 'achievement.initial.approve') || canPerform(user, state.roles, 'achievement.final.approve');
+  const reviewAccess = { canInitial: canPerform(user, state.roles, 'achievement.initial.approve'), canFinal: canPerform(user, state.roles, 'achievement.final.approve') };
+  const canReview = reviewAccess.canInitial || reviewAccess.canFinal;
+  const reviewAction = (item: Achievement) => isTopicOperational(state.topics.find((topic) => topic.id === item.topicId)) ? reviewActionFor(item.status as never, reviewAccess) : null;
   const [form] = Form.useForm<FormValues>();
   const [externalForm] = Form.useForm<{ date: string; number: string }>();
   const [supplementForm] = Form.useForm<SupplementValues>();
@@ -42,6 +44,7 @@ export function AchievementEntryPage() {
   const [unitId, setUnitId] = useState<string>();
   const [status, setStatus] = useState<string>();
   const [keyword, setKeyword] = useState('');
+  const [progressNodeId, setProgressNodeId] = useState<string | undefined>(() => [...state.nodes].sort((a, b) => b.sortOrder - a.sortOrder)[0]?.id);
 
   const visible = useMemo(
     () => state.achievements.filter((item) => canViewAchievement(user, item, state.topicMemberships)),
@@ -50,19 +53,24 @@ export function AchievementEntryPage() {
   const visibleAllocations = state.unitIndicatorAllocations.filter((item) => item.status === '已下发' && item.targetQuantity > 0
     && topics.some((topic) => topic.id === item.topicId)
     && canViewAchievement(user, { topicId: item.topicId, unitId: item.unitId, uploadUnitId: item.unitId } as Achievement, state.topicMemberships));
+  const selectedNode = state.nodes.find((item) => item.id === progressNodeId);
+  const nodeOrder = new Map(state.nodes.map((item) => [item.id, item.sortOrder]));
   const progressAchievements = visible.filter((item) => (!topicId || item.topicId === topicId)
+    && (!selectedNode || (nodeOrder.get(item.nodeId) ?? Number.MAX_SAFE_INTEGER) <= selectedNode.sortOrder)
     && (!definitionId || achievementMatchesIndicator(item, definitionId, state.indicatorDefinitions.find((definition) => definition.id === definitionId)?.achievementType ?? item.achievementType))
     && (!unitId || (item.uploadUnitId ?? item.unitId) === unitId));
   const rows = progressAchievements.filter((item) => (!status || item.status === status)
     && (!keyword || item.title.toLowerCase().includes(keyword.toLowerCase()))
-    && (workScope === 'all' || Boolean(reviewActionFor(item.status as never, user.role))));
+    && (workScope === 'all' || Boolean(reviewAction(item))));
   const progressRows = aggregateAchievementProgress(
-    visibleAllocations.filter((item) => (!topicId || item.topicId === topicId)
+    visibleAllocations.filter((item) => (!progressNodeId || item.nodeId === progressNodeId)
+      && (!topicId || item.topicId === topicId)
       && (!definitionId || item.indicatorDefinitionId === definitionId)
       && (!unitId || item.unitId === unitId)),
     progressAchievements,
   );
-  const totals = progressRows.reduce((sum, item) => ({
+  const baseDefinitionIds = new Set(state.indicatorDefinitions.filter((item) => item.enabled && item.name === item.achievementType).map((item) => item.id));
+  const totals = progressRows.filter((item) => baseDefinitionIds.has(item.indicatorDefinitionId)).reduce((sum, item) => ({
     target: sum.target + item.target,
     initiated: sum.initiated + item.initiated,
     preApproved: sum.preApproved + item.preApproved,
@@ -74,9 +82,9 @@ export function AchievementEntryPage() {
   const completionRate = totals.target > 0 ? Math.round(totals.effective / totals.target * 100) : 0;
   const unitOptions = state.units.filter((unit) => visibleAllocations.some((item) => item.unitId === unit.id)
     || visible.some((item) => (item.uploadUnitId ?? item.unitId) === unit.id));
-  const baseDefinitionIds = new Set(state.indicatorDefinitions.filter((item) => item.enabled && item.name === item.achievementType).map((item) => item.id));
-  const ownBaseAllocations = state.unitIndicatorAllocations.filter((item) => item.status === '已下发' && item.targetQuantity > 0 && item.unitId === user.unitId && baseDefinitionIds.has(item.indicatorDefinitionId));
-  const isOwner = (item: Achievement) => canSubmit && (item.uploadUnitId ?? item.unitId) === user.unitId;
+  const ownBaseAllocations = state.unitIndicatorAllocations.filter((item) => item.status === '已下发' && item.targetQuantity > 0 && item.unitId === user.unitId && baseDefinitionIds.has(item.indicatorDefinitionId)
+    && isTopicOperational(state.topics.find((topic) => topic.id === item.topicId)));
+  const isOwner = (item: Achievement) => canSubmit && (item.uploadUnitId ?? item.unitId) === user.unitId && isTopicOperational(state.topics.find((topic) => topic.id === item.topicId));
 
   const openCreate = () => {
     if (!canSubmit || !user.unitId) return;
@@ -130,7 +138,7 @@ export function AchievementEntryPage() {
         nodeId: editing.nodeId || values.nodeId!,
         achievementType: editing.achievementType,
         materials: [...editing.materials, ...buildMaterials(editing.id, editing.materials.length)],
-      });
+      }, user.id);
     } else {
       const allocation = ownBaseAllocations.find((item) => item.id === values.unitIndicatorAllocationId && item.topicId === values.topicId);
       if (!allocation) return message.warning('当前单位尚未获得该课题下此项成果指标');
@@ -160,7 +168,7 @@ export function AchievementEntryPage() {
         materials: buildMaterials(achievementId, 0),
         recordVersion: 1,
         history: [],
-      });
+      }, user.id);
     }
     message.success('成果草稿已保存');
     setFormFiles({});
@@ -189,7 +197,7 @@ export function AchievementEntryPage() {
       externalSubmissionNumber: values.number,
       ...(external.achievementType === '学术论文' ? { submissionDate: values.date, paperStatus: '已投稿' } : { applicationDate: values.date, patentStatus: '已申请' }),
       progressStatus: external.achievementType === '学术论文' ? '已投稿' : '已申请',
-    });
+    }, user.id);
     state.advanceAchievement(external.id, 'REGISTER_EXTERNAL_SUBMISSION', user.id);
     setExternal(null);
     message.success('投稿/申请信息已登记');
@@ -228,7 +236,7 @@ export function AchievementEntryPage() {
       uploader: user.name,
       uploadedAt: at,
     }));
-    state.updateAchievement(supplementFor.id, { ...values, materials: [...supplementFor.materials, ...materials] });
+    state.updateAchievement(supplementFor.id, { ...values, materials: [...supplementFor.materials, ...materials] }, user.id);
     try {
       state.advanceAchievement(supplementFor.id, 'SUBMIT_SUPPLEMENT', user.id);
       message.success('补充材料已提交科研助理初审');
@@ -239,7 +247,7 @@ export function AchievementEntryPage() {
   };
   const confirmDecision = () => {
     if (!detail || !decision) return;
-    const action = reviewActionFor(detail.status as never, user.role);
+    const action = reviewAction(detail);
     if (!action) return message.warning('当前成果不在您的审批环节');
     if (decision === 'return' && !opinion.trim()) return message.warning('退回时必须填写审批意见');
     try {
@@ -258,6 +266,7 @@ export function AchievementEntryPage() {
     <Card className="achievement-filter-card" style={{ marginBottom: 16 }}>
       <div className={`achievement-filter-grid${filterExpanded ? ' is-expanded' : ''}`}>
         {canReview && <Space className="achievement-filter-field" size={8}><Text>处理范围</Text><Select value={workScope} onChange={setWorkScope} options={[{ label: '待我处理', value: 'pending' }, { label: '全部成果', value: 'all' }]} /></Space>}
+        <Space className="achievement-filter-field" size={8}><Text>考核节点</Text><Select value={progressNodeId} onChange={setProgressNodeId} options={[...state.nodes].sort((a, b) => a.sortOrder - b.sortOrder).map((item) => ({ label: item.name, value: item.id }))} /></Space>
         <Space className="achievement-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部相关课题" value={topicId} onChange={setTopicId} options={topics.map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} /></Space>
         <Space className="achievement-filter-field" size={8}><Text>成果状态</Text><Select allowClear placeholder="全部状态" value={status} onChange={setStatus} options={[...new Set(visible.map((item) => item.status))].map((item) => ({ label: item === '已生效' ? '已完成' : item, value: item }))} /></Space>
         {filterExpanded && <>
@@ -267,7 +276,7 @@ export function AchievementEntryPage() {
         </>}
         <Space className="achievement-filter-actions" size={10}>
           <Button type="primary" icon={<SearchOutlined />}>查询</Button>
-          <Button onClick={() => { setWorkScope(canReview ? 'pending' : 'all'); setTopicId(undefined); setDefinitionId(undefined); setUnitId(undefined); setStatus(undefined); setKeyword(''); }}>重置</Button>
+          <Button onClick={() => { setWorkScope(canReview ? 'pending' : 'all'); setProgressNodeId([...state.nodes].sort((a, b) => b.sortOrder - a.sortOrder)[0]?.id); setTopicId(undefined); setDefinitionId(undefined); setUnitId(undefined); setStatus(undefined); setKeyword(''); }}>重置</Button>
           <Button type="link" icon={filterExpanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setFilterExpanded(!filterExpanded)}>{filterExpanded ? '收起' : '展开'}</Button>
         </Space>
       </div>
@@ -304,7 +313,7 @@ export function AchievementEntryPage() {
         { title: '更新时间', dataIndex: 'updatedAt', width: 110, render: (value) => value?.slice(0, 10) },
         { title: '操作', fixed: 'right', width: 350, render: (_, row) => <Space wrap>
           <Button type="link" icon={<EyeOutlined />} onClick={() => setDetail(row)}>详情</Button>
-          {reviewActionFor(row.status as never, user.role) && <Button type="link" onClick={() => setDetail(row)}>审批</Button>}
+          {reviewAction(row) && <Button type="link" onClick={() => setDetail(row)}>审批</Button>}
           {isOwner(row) && isEditableAchievementStatus(row.status) && !['允许投稿/申请', '已投稿/已申请', '待见刊补充', '待授权补充', '补充退回'].includes(row.status) && <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>编辑</Button>}
           {isOwner(row) && ['预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(row.status) && <Button type="link" icon={<SendOutlined />} onClick={() => submit(row)}>提交审批</Button>}
           {isOwner(row) && row.status === '允许投稿/申请' && <Button size="small" type="primary" onClick={() => { setExternal(row); externalForm.resetFields(); }}>{row.achievementType === '学术论文' ? '登记投稿' : '登记申请'}</Button>}
@@ -331,8 +340,8 @@ export function AchievementEntryPage() {
         </Card>
       </Form>
     </Drawer>
-    <Drawer width={860} title="成果详情" open={Boolean(detail)} onClose={() => setDetail(null)} extra={detail && reviewActionFor(detail.status as never, user.role) && <Space><Button danger icon={<RollbackOutlined />} onClick={() => setDecision('return')}>退回修改</Button><Button type="primary" icon={<CheckOutlined />} onClick={() => setDecision('approve')}>审批通过</Button></Space>}>
-      {detail && <><Alert style={{ marginBottom: 16 }} type="info" showIcon message={user.role === '科研助理' ? '当前为科研助理初审环节' : user.role === '项目技术负责人' ? '当前为项目技术负责人终审环节' : '成果详情'} /><AchievementDetail achievement={detail} topics={state.topics} units={state.units} records={state.approvalRecords.filter((item) => item.businessId === detail.id)} users={state.users} /></>}
+    <Drawer width={860} title="成果详情" open={Boolean(detail)} onClose={() => setDetail(null)} extra={detail && reviewAction(detail) && <Space><Button danger icon={<RollbackOutlined />} onClick={() => setDecision('return')}>退回修改</Button><Button type="primary" icon={<CheckOutlined />} onClick={() => setDecision('approve')}>审批通过</Button></Space>}>
+      {detail && <><Alert style={{ marginBottom: 16 }} type="info" showIcon message={reviewAction(detail) ? (detail.status.includes('终审中') ? '当前为终审环节' : '当前为初审环节') : '成果详情'} /><AchievementDetail achievement={detail} topics={state.topics} units={state.units} records={state.approvalRecords.filter((item) => item.businessId === detail.id)} users={state.users} /></>}
     </Drawer>
     <Modal title={external?.achievementType === '学术论文' ? '登记实际投稿' : '登记实际申请'} open={Boolean(external)} onCancel={() => setExternal(null)} onOk={registerExternal} okText="确认登记">
       <Form form={externalForm} layout="vertical"><Form.Item label="实际投稿/申请日期" name="date" rules={[{ required: true }]}><Input type="date" /></Form.Item><Form.Item label="投稿/申请编号" name="number" rules={[{ required: true }]}><Input /></Form.Item></Form>

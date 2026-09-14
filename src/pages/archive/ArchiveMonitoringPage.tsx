@@ -1,15 +1,14 @@
 import { Card, Col, Progress, Row, Space, Table, Tag } from 'antd';
 import { PageHeader } from '../../components/common/PageHeader';
 import { useAppStore } from '../../store';
-import { archiveCompletion } from '../../domain/archive';
+import { archiveCompletion, topicArchiveRequirements } from '../../domain/archive';
 import { accessibleTopics, canViewAllTopicUnitData, isGlobalUser, isInternalTopicUnit, isTopicLead } from '../../domain/topic-access';
 
 export function ArchiveMonitoringPage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const visibleTopics = accessibleTopics(user, state.topics, state.topicMemberships);
-  const topicReqs = state.archiveRequirements.filter((item) => item.ownerType === 'TOPIC_NATIONAL');
-  const topicRows = visibleTopics.flatMap((topic) => state.topicMemberships.filter((member) => member.topicId === topic.id && member.enabled && (canViewAllTopicUnitData(user, topic.id, state.topicMemberships) || member.unitId === user.unitId)).map((member) => ({ ...topic, rowId: `${topic.id}:${member.unitId}`, unitId: member.unitId, stats: archiveCompletion(topicReqs, state.archiveSubmissions.filter((item) => item.ownerType === 'TOPIC_NATIONAL' && item.ownerId === `${topic.id}:${member.unitId}`)) })));
+  const topicRows = visibleTopics.flatMap((topic) => state.topicMemberships.filter((member) => member.topicId === topic.id && member.enabled && (canViewAllTopicUnitData(user, topic.id, state.topicMemberships) || member.unitId === user.unitId)).map((member) => ({ ...topic, rowId: `${topic.id}:${member.unitId}`, unitId: member.unitId, stats: archiveCompletion(topicArchiveRequirements(state.archiveRequirements, topic.id, member.unitId), state.archiveSubmissions.filter((item) => item.ownerType === 'TOPIC_NATIONAL' && item.ownerId === `${topic.id}:${member.unitId}`)) })));
   const showSelfFunded = isGlobalUser(user) || isInternalTopicUnit(user);
   const projectRows = showSelfFunded ? state.selfFundedProjects.filter((item) => isGlobalUser(user) || (visibleTopics.some((topic) => topic.id === item.topicId) && (item.ownerUnitId === user.unitId || isTopicLead(user, item.topicId, state.topicMemberships)))).map((project) => ({ ...project, stats: archiveCompletion(state.archiveRequirements.filter((item) => item.ownerType === 'SELF_FUNDED' && item.templateId === project.templateSnapshotId), state.archiveSubmissions.filter((item) => item.ownerType === 'SELF_FUNDED' && item.ownerId === project.id)) })) : [];
   return <>

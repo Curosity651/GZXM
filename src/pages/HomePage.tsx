@@ -12,7 +12,7 @@ const { Text } = Typography;
 export function HomePage() {
   const state = useAppStore();
   const user = state.currentUser!;
-  const summaries = buildTopicSummariesV2(state.topics, state.topicMemberships, state.topicIndicators, state.achievements, user);
+  const summaries = buildTopicSummariesV2(state.topics, state.topicMemberships, state.topicIndicators, state.achievements, user, state.nodes, state.indicatorDefinitions);
   const visibleAchievements = state.achievements.filter((item) => canViewAchievement(user, item, state.topicMemberships));
   const visibleTopicIds = new Set(accessibleTopics(user, state.topics, state.topicMemberships).map((item) => item.id));
   const visibleReports = state.reports.filter((item) => visibleTopicIds.has(item.topicId));

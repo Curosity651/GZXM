@@ -1,0 +1,697 @@
+openapi: 3.1.0
+info:
+  title: 重点项目科研管理系统 API
+  version: 1.0.0
+  description: |
+    当前 React 原型对应的后端契约。ID 在 JSON 中统一使用 string；时间为 RFC 3339，日期为 ISO 8601。
+    归档材料无审批流程；成果和月季报采用初审、终审并保留提交版本快照。
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - { name: Auth, description: 登录与当前会话 }
+  - { name: Users, description: 用户、角色、单位 }
+  - { name: Topics, description: 课题与成员关系 }
+  - { name: Indicators, description: 考核节点与两级指标 }
+  - { name: Achievements, description: 成果填报、审批与进度 }
+  - { name: Reports, description: 月季报规则、填报与审批 }
+  - { name: Archives, description: 国家材料与配套自筹材料 }
+  - { name: Files, description: 存储无关的文件服务 }
+  - { name: Dashboard, description: 工作台统计 }
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      security: []
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } } } }
+      responses:
+        '200': { description: 登录成功, content: { application/json: { schema: { $ref: '#/components/schemas/TokenResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      security: []
+      responses:
+        '200': { description: 刷新成功, content: { application/json: { schema: { $ref: '#/components/schemas/TokenResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      responses: { '204': { description: 已退出 } }
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      responses:
+        '200': { description: 当前用户、权限和课题关系, content: { application/json: { schema: { $ref: '#/components/schemas/CurrentUser' } } } }
+
+  /users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: roleId, in: query, schema: { type: string } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: 用户分页, content: { application/json: { schema: { $ref: '#/components/schemas/UserPage' } } } }
+    post:
+      tags: [Users]
+      operationId: createUser
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UserCreateRequest' } } } }
+      responses:
+        '201': { description: 已创建, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /users/{userId}:
+    parameters: [{ $ref: '#/components/parameters/UserId' }]
+    get:
+      tags: [Users]
+      operationId: getUser
+      responses: { '200': { description: 用户详情, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } } }
+    patch:
+      tags: [Users]
+      operationId: updateUserProfile
+      description: 编辑用户名、联系人、手机和邮箱；角色不可通过本接口修改。
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UserUpdateRequest' } } } }
+      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } } }
+  /users/{userId}/status:
+    put:
+      tags: [Users]
+      operationId: setUserStatus
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } } }
+      responses: { '200': { description: 已更新；停用时现有会话立即失效, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } } }
+  '/users/{userId}/password:reset':
+    post:
+      tags: [Users]
+      operationId: resetUserPassword
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      responses: { '204': { description: 已重置并使旧会话失效 } }
+
+  /roles:
+    get:
+      tags: [Users]
+      operationId: listRoles
+      responses: { '200': { description: 角色列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Role' } } } } } }
+  /roles/{roleId}:
+    get:
+      tags: [Users]
+      operationId: getRole
+      parameters: [{ $ref: '#/components/parameters/RoleId' }]
+      responses: { '200': { description: 角色详情, content: { application/json: { schema: { $ref: '#/components/schemas/Role' } } } } }
+    put:
+      tags: [Users]
+      operationId: updateRolePermissions
+      parameters: [{ $ref: '#/components/parameters/RoleId' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RolePermissionRequest' } } } }
+      responses: { '200': { description: 已更新并清除权限缓存, content: { application/json: { schema: { $ref: '#/components/schemas/Role' } } } } }
+  /permissions:
+    get:
+      tags: [Users]
+      operationId: listPermissions
+      responses: { '200': { description: 页面与动作权限目录, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Permission' } } } } } }
+  /units:
+    get:
+      tags: [Users]
+      operationId: listUnits
+      parameters:
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: internal, in: query, schema: { type: boolean } }
+      responses: { '200': { description: 单位列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Unit' } } } } } }
+
+  /topics:
+    get:
+      tags: [Topics]
+      operationId: listTopics
+      description: 全局角色返回全部课题，课题单位仅返回有效成员关系关联的课题。
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+      responses: { '200': { description: 课题分页, content: { application/json: { schema: { $ref: '#/components/schemas/TopicPage' } } } } }
+    post:
+      tags: [Topics]
+      operationId: createTopic
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TopicWriteRequest' } } } }
+      responses: { '201': { description: 已创建并建立唯一 LEAD 关系, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } } }
+  /topics/{topicId}:
+    parameters: [{ $ref: '#/components/parameters/TopicId' }]
+    get:
+      tags: [Topics]
+      operationId: getTopic
+      responses: { '200': { description: 课题详情, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+    put:
+      tags: [Topics]
+      operationId: updateTopic
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TopicWriteRequest' } } } }
+      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } } }
+  /topics/{topicId}/status:
+    put:
+      tags: [Topics]
+      operationId: setTopicStatus
+      parameters: [{ $ref: '#/components/parameters/TopicId' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean }, status: { $ref: '#/components/schemas/TopicStatus' } } } } } }
+      responses: { '200': { description: 已更新；停用后历史只读, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } } }
+  /topics/{topicId}/members:
+    get:
+      tags: [Topics]
+      operationId: listTopicMembers
+      parameters: [{ $ref: '#/components/parameters/TopicId' }]
+      responses: { '200': { description: 可见成员列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicMembership' } } } } } }
+    post:
+      tags: [Topics]
+      operationId: addTopicParticipant
+      parameters: [{ $ref: '#/components/parameters/TopicId' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [unitId], properties: { unitId: { type: string } } } } } }
+      responses: { '201': { description: 已添加承担单位, content: { application/json: { schema: { $ref: '#/components/schemas/TopicMembership' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+  /topics/{topicId}/members/{membershipId}/status:
+    put:
+      tags: [Topics]
+      operationId: setTopicMembershipStatus
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { name: membershipId, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } } }
+      responses: { '200': { description: 已更新成员关系, content: { application/json: { schema: { $ref: '#/components/schemas/TopicMembership' } } } } }
+
+  /time-nodes:
+    get:
+      tags: [Indicators]
+      operationId: listTimeNodes
+      responses: { '200': { description: 考核节点, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TimeNode' } } } } } }
+  /indicator-definitions:
+    get:
+      tags: [Indicators]
+      operationId: listIndicatorDefinitions
+      responses: { '200': { description: 五类基础成果和固定专项指标, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/IndicatorDefinition' } } } } } }
+  /topics/{topicId}/indicator-targets:
+    get:
+      tags: [Indicators]
+      operationId: listTopicIndicatorTargets
+      parameters:
+        - { $ref: '#/components/parameters/TopicId' }
+        - { name: nodeId, in: query, required: true, schema: { type: string } }
+      responses: { '200': { description: 当前节点课题累计目标, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } } }
+    put:
+      tags: [Indicators]
+      operationId: saveTopicIndicatorTargets
+      parameters: [{ $ref: '#/components/parameters/TopicId' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorTargetBatch' } } } }
+      responses: { '200': { description: 已保存草稿, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+  '/topics/{topicId}/indicator-targets:publish':
+    post:
+      tags: [Indicators]
+      operationId: publishTopicIndicatorTargets
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId], properties: { nodeId: { type: string } } } } } }
+      responses: { '204': { description: 已下发 }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /topics/{topicId}/unit-allocations:
+    get:
+      tags: [Indicators]
+      operationId: listUnitAllocations
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { name: nodeId, in: query, required: true, schema: { type: string } }]
+      responses: { '200': { description: 当前节点单位累计分配, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } } }
+    put:
+      tags: [Indicators]
+      operationId: saveUnitAllocations
+      parameters: [{ $ref: '#/components/parameters/TopicId' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnitAllocationBatch' } } } }
+      responses: { '200': { description: 已保存, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+  '/topics/{topicId}/unit-allocations:publish':
+    post:
+      tags: [Indicators]
+      operationId: publishUnitAllocations
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId], properties: { nodeId: { type: string } } } } } }
+      responses: { '204': { description: 已下发 }, '422': { $ref: '#/components/responses/ValidationError' } }
+
+  /achievements:
+    get:
+      tags: [Achievements]
+      operationId: listAchievements
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+        - { name: topicId, in: query, schema: { type: string } }
+        - { name: nodeId, in: query, schema: { type: string } }
+        - { name: unitId, in: query, schema: { type: string } }
+        - { name: indicatorDefinitionId, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: pendingForMe, in: query, schema: { type: boolean } }
+      responses: { '200': { description: 按数据范围过滤的成果分页, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementPage' } } } } }
+    post:
+      tags: [Achievements]
+      operationId: createAchievement
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementWriteRequest' } } } }
+      responses: { '201': { description: 已创建草稿, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /achievements/{achievementId}:
+    parameters: [{ $ref: '#/components/parameters/AchievementId' }]
+    get:
+      tags: [Achievements]
+      operationId: getAchievement
+      responses: { '200': { description: 成果详情, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } } }
+    put:
+      tags: [Achievements]
+      operationId: updateAchievement
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementWriteRequest' } } } }
+      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+  /achievements/{achievementId}/actions:
+    post:
+      tags: [Achievements]
+      operationId: executeAchievementAction
+      parameters: [{ $ref: '#/components/parameters/AchievementId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementActionRequest' } } } }
+      responses: { '200': { description: 状态流转完成, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+  /achievements/{achievementId}/reviews:
+    post:
+      tags: [Achievements]
+      operationId: reviewAchievement
+      parameters: [{ $ref: '#/components/parameters/AchievementId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReviewRequest' } } } }
+      responses: { '201': { description: 审批完成, content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalRecord' } } } } }
+  /achievements/{achievementId}/snapshots:
+    get:
+      tags: [Achievements]
+      operationId: listAchievementSnapshots
+      parameters: [{ $ref: '#/components/parameters/AchievementId' }]
+      responses: { '200': { description: 不可变提交版本, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SubmissionSnapshot' } } } } } }
+  /achievement-progress:
+    get:
+      tags: [Achievements]
+      operationId: getAchievementProgress
+      parameters:
+        - { name: topicId, in: query, schema: { type: string } }
+        - { name: nodeId, in: query, required: true, schema: { type: string } }
+        - { name: unitId, in: query, schema: { type: string } }
+      responses: { '200': { description: 基础总量与专项子集进度, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementProgress' } } } } }
+
+  /topics/{topicId}/report-rule:
+    get:
+      tags: [Reports]
+      operationId: getTopicReportRule
+      parameters: [{ $ref: '#/components/parameters/TopicId' }]
+      responses: { '200': { description: 课题独立规则, content: { application/json: { schema: { $ref: '#/components/schemas/ReportRule' } } } } }
+    put:
+      tags: [Reports]
+      operationId: updateTopicReportRule
+      parameters: [{ $ref: '#/components/parameters/TopicId' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReportRule' } } } }
+      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/ReportRule' } } } } }
+  /reports:
+    get:
+      tags: [Reports]
+      operationId: listReports
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+        - { name: topicId, in: query, schema: { type: string } }
+        - { name: reportType, in: query, schema: { $ref: '#/components/schemas/ReportType' } }
+        - { name: year, in: query, schema: { type: integer } }
+        - { name: period, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: pendingForMe, in: query, schema: { type: boolean } }
+      responses: { '200': { description: 只返回实际创建的报告, content: { application/json: { schema: { $ref: '#/components/schemas/ReportPage' } } } } }
+    post:
+      tags: [Reports]
+      operationId: createReport
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReportCreateRequest' } } } }
+      responses: { '201': { description: 已按课题规则创建, content: { application/json: { schema: { $ref: '#/components/schemas/ProgressReport' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /reports/{reportId}:
+    parameters: [{ $ref: '#/components/parameters/ReportId' }]
+    get:
+      tags: [Reports]
+      operationId: getReport
+      responses: { '200': { description: 报告详情, content: { application/json: { schema: { $ref: '#/components/schemas/ProgressReport' } } } } }
+    put:
+      tags: [Reports]
+      operationId: updateReport
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReportContentRequest' } } } }
+      responses: { '200': { description: 已保存草稿, content: { application/json: { schema: { $ref: '#/components/schemas/ProgressReport' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+  '/reports/{reportId}:submit':
+    post:
+      tags: [Reports]
+      operationId: submitReport
+      parameters: [{ $ref: '#/components/parameters/ReportId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: 已提交初审并冻结版本, content: { application/json: { schema: { $ref: '#/components/schemas/ProgressReport' } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /reports/{reportId}/reviews:
+    post:
+      tags: [Reports]
+      operationId: reviewReport
+      parameters: [{ $ref: '#/components/parameters/ReportId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReviewRequest' } } } }
+      responses: { '201': { description: 审批完成, content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalRecord' } } } } }
+  /reports/{reportId}/snapshots:
+    get:
+      tags: [Reports]
+      operationId: listReportSnapshots
+      parameters: [{ $ref: '#/components/parameters/ReportId' }]
+      responses: { '200': { description: 报告提交版本, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SubmissionSnapshot' } } } } } }
+  /report-progress:
+    get:
+      tags: [Reports]
+      operationId: getReportProgress
+      parameters: [{ name: topicId, in: query, schema: { type: string } }, { name: year, in: query, schema: { type: integer } }]
+      responses: { '200': { description: 已创建报告的提交与审批统计, content: { application/json: { schema: { type: object, additionalProperties: true } } } } }
+
+  /archive/national:
+    get:
+      tags: [Archives]
+      operationId: listNationalArchiveDirectories
+      parameters: [{ name: topicId, in: query, schema: { type: string } }, { name: unitId, in: query, schema: { type: string } }]
+      responses: { '200': { description: 按课题和单位隔离的国家材料目录, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ArchiveDirectory' } } } } } }
+  /archive/national/topics/{topicId}/units/{unitId}/folders:
+    get:
+      tags: [Archives]
+      operationId: listNationalArchiveFolders
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/UnitId' }]
+      responses: { '200': { description: 固定要求和本单位自定义文件夹, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ArchiveFolder' } } } } } }
+    post:
+      tags: [Archives]
+      operationId: createNationalCustomFolder
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/UnitId' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 200 } } } } } }
+      responses: { '201': { description: 已创建单位私有文件夹, content: { application/json: { schema: { $ref: '#/components/schemas/ArchiveFolder' } } } } }
+  /archive/folders/{folderId}:
+    delete:
+      tags: [Archives]
+      operationId: deleteCustomArchiveFolder
+      parameters: [{ $ref: '#/components/parameters/FolderId' }]
+      responses: { '204': { description: 已删除空的自定义文件夹 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /archive/folders/{folderId}/files:
+    get:
+      tags: [Archives]
+      operationId: listArchiveFolderFiles
+      parameters: [{ $ref: '#/components/parameters/FolderId' }]
+      responses: { '200': { description: 文件列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/FileObject' } } } } } }
+    post:
+      tags: [Archives]
+      operationId: attachFileToArchiveFolder
+      parameters: [{ $ref: '#/components/parameters/FolderId' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [fileId], properties: { fileId: { type: string } } } } } }
+      responses: { '201': { description: 已关联并直接计入归档完成度, content: { application/json: { schema: { $ref: '#/components/schemas/FileObject' } } } } }
+  /archive/folders/{folderId}/files/{fileId}:
+    delete:
+      tags: [Archives]
+      operationId: removeArchiveFolderFile
+      parameters: [{ $ref: '#/components/parameters/FolderId' }, { $ref: '#/components/parameters/FileId' }]
+      responses: { '204': { description: 已解除并按策略删除对象 } }
+  /self-funded-projects:
+    get:
+      tags: [Archives]
+      operationId: listSelfFundedProjects
+      parameters: [{ name: topicId, in: query, schema: { type: string } }, { name: unitId, in: query, schema: { type: string } }]
+      responses: { '200': { description: 内部单位可见范围内的项目, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SelfFundedProject' } } } } } }
+    post:
+      tags: [Archives]
+      operationId: createSelfFundedProject
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SelfFundedProjectRequest' } } } }
+      responses: { '201': { description: 已创建并冻结材料模板, content: { application/json: { schema: { $ref: '#/components/schemas/SelfFundedProject' } } } } }
+  /self-funded-projects/{projectId}:
+    get:
+      tags: [Archives]
+      operationId: getSelfFundedProject
+      parameters: [{ name: projectId, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: 项目与材料完成度, content: { application/json: { schema: { $ref: '#/components/schemas/SelfFundedProject' } } } } }
+    put:
+      tags: [Archives]
+      operationId: updateSelfFundedProject
+      parameters: [{ name: projectId, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SelfFundedProjectRequest' } } } }
+      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/SelfFundedProject' } } } } }
+  /self-funded-projects/{projectId}/folders:
+    get:
+      tags: [Archives]
+      operationId: listSelfFundedProjectFolders
+      parameters: [{ name: projectId, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: 项目创建时冻结的文件夹清单, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ArchiveFolder' } } } } } }
+  /archive-progress:
+    get:
+      tags: [Archives]
+      operationId: getArchiveProgress
+      parameters: [{ name: topicId, in: query, schema: { type: string } }, { name: unitId, in: query, schema: { type: string } }, { name: ownerType, in: query, schema: { type: string, enum: [TOPIC_NATIONAL, SELF_FUNDED] } }]
+      responses: { '200': { description: 科研助理与技术负责人可见的归档统计, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ArchiveProgress' } } } } } }
+
+  /files/upload-tickets:
+    post:
+      tags: [Files]
+      operationId: createUploadTicket
+      description: 返回短期上传地址；底层可以是 Mock、MinIO 或其他 S3 服务。
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UploadTicketRequest' } } } }
+      responses: { '201': { description: 上传票据, content: { application/json: { schema: { $ref: '#/components/schemas/UploadTicket' } } } } }
+  '/files/{fileId}:complete':
+    post:
+      tags: [Files]
+      operationId: completeUpload
+      parameters: [{ $ref: '#/components/parameters/FileId' }]
+      responses: { '200': { description: 校验对象后登记完成, content: { application/json: { schema: { $ref: '#/components/schemas/FileObject' } } } } }
+  /files/{fileId}/download-url:
+    get:
+      tags: [Files]
+      operationId: getDownloadUrl
+      parameters: [{ $ref: '#/components/parameters/FileId' }]
+      responses: { '200': { description: 短期下载地址, content: { application/json: { schema: { $ref: '#/components/schemas/SignedUrl' } } } } }
+  /files/{fileId}/preview-url:
+    get:
+      tags: [Files]
+      operationId: getPreviewUrl
+      parameters: [{ $ref: '#/components/parameters/FileId' }]
+      responses: { '200': { description: 短期预览地址, content: { application/json: { schema: { $ref: '#/components/schemas/SignedUrl' } } } } }
+
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      operationId: getDashboardSummary
+      responses: { '200': { description: 按当前数据范围聚合的工作台, content: { application/json: { schema: { type: object, additionalProperties: true } } } } }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    Size: { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 20 } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 100 } }
+    UserId: { name: userId, in: path, required: true, schema: { type: string } }
+    RoleId: { name: roleId, in: path, required: true, schema: { type: string } }
+    UnitId: { name: unitId, in: path, required: true, schema: { type: string } }
+    TopicId: { name: topicId, in: path, required: true, schema: { type: string } }
+    AchievementId: { name: achievementId, in: path, required: true, schema: { type: string } }
+    ReportId: { name: reportId, in: path, required: true, schema: { type: string } }
+    FolderId: { name: folderId, in: path, required: true, schema: { type: string } }
+    FileId: { name: fileId, in: path, required: true, schema: { type: string } }
+  responses:
+    Unauthorized: { description: 未登录或令牌失效, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Forbidden: { description: 没有功能或数据权限, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Conflict: { description: 唯一约束、状态或乐观锁冲突, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    ValidationError: { description: 业务或字段校验失败, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string, example: TOPIC_NOT_OPERATIONAL }
+        traceId: { type: string }
+        fieldErrors: { type: array, items: { type: object, properties: { field: { type: string }, message: { type: string } } } }
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties: { username: { type: string, minLength: 1 }, password: { type: string, minLength: 6 } }
+    TokenResponse:
+      type: object
+      required: [accessToken, expiresIn, user]
+      properties: { accessToken: { type: string }, tokenType: { type: string, const: Bearer }, expiresIn: { type: integer }, user: { $ref: '#/components/schemas/CurrentUser' } }
+    CurrentUser:
+      allOf:
+        - { $ref: '#/components/schemas/User' }
+        - type: object
+          required: [pagePermissions, actionPermissions, memberships]
+          properties:
+            pagePermissions: { type: array, items: { type: string } }
+            actionPermissions: { type: array, items: { type: string } }
+            memberships: { type: array, items: { $ref: '#/components/schemas/TopicMembership' } }
+    User:
+      type: object
+      required: [id, username, name, roleId, roleName, enabled]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        name: { type: string, description: 单位联系人姓名 }
+        unitId: { type: [string, 'null'] }
+        roleId: { type: string }
+        roleName: { type: string }
+        phone: { type: [string, 'null'] }
+        email: { type: [string, 'null'], format: email }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    UserCreateRequest:
+      type: object
+      required: [username, password, roleId, name]
+      properties: { username: { type: string }, password: { type: string, minLength: 8 }, roleId: { type: string }, unitId: { type: [string, 'null'] }, name: { type: string }, phone: { type: string }, email: { type: string, format: email }, enabled: { type: boolean, default: true } }
+    UserUpdateRequest:
+      type: object
+      properties: { username: { type: string }, name: { type: string }, phone: { type: string }, email: { type: string, format: email } }
+    UserPage:
+      type: object
+      required: [items, page, size, total]
+      properties: { items: { type: array, items: { $ref: '#/components/schemas/User' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } }
+    Role:
+      type: object
+      required: [id, code, name, pagePermissions, actionPermissions, enabled, builtIn]
+      properties: { id: { type: string }, code: { type: string }, name: { type: string }, description: { type: string }, pagePermissions: { type: array, items: { type: string } }, actionPermissions: { type: array, items: { type: string } }, enabled: { type: boolean }, builtIn: { type: boolean } }
+    RolePermissionRequest:
+      type: object
+      required: [pagePermissions, actionPermissions]
+      properties: { pagePermissions: { type: array, uniqueItems: true, items: { type: string } }, actionPermissions: { type: array, uniqueItems: true, items: { type: string } }, enabled: { type: boolean } }
+    Permission:
+      type: object
+      required: [code, name, type, group]
+      properties: { code: { type: string }, name: { type: string }, type: { type: string, enum: [PAGE, ACTION] }, group: { type: string } }
+    Unit:
+      type: object
+      required: [id, code, name, internal, enabled]
+      properties: { id: { type: string }, code: { type: string }, name: { type: string }, internal: { type: boolean }, enabled: { type: boolean } }
+    TopicStatus: { type: string, enum: [DRAFT, ACTIVE, PAUSED, CLOSED] }
+    Topic:
+      type: object
+      required: [id, code, name, leadUnitId, status, enabled, recordVersion]
+      properties: { id: { type: string }, code: { type: string }, name: { type: string }, summary: { type: string }, leadUnitId: { type: string }, status: { $ref: '#/components/schemas/TopicStatus' }, enabled: { type: boolean }, startDate: { type: string, format: date }, endDate: { type: string, format: date }, recordVersion: { type: integer }, members: { type: array, items: { $ref: '#/components/schemas/TopicMembership' } } }
+    TopicWriteRequest:
+      type: object
+      required: [code, name, leadUnitId]
+      properties: { code: { type: string }, name: { type: string }, summary: { type: string }, leadUnitId: { type: string }, participantUnitIds: { type: array, items: { type: string } }, startDate: { type: string, format: date }, endDate: { type: string, format: date }, recordVersion: { type: integer } }
+    TopicPage:
+      type: object
+      required: [items, page, size, total]
+      properties: { items: { type: array, items: { $ref: '#/components/schemas/Topic' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } }
+    TopicMembership:
+      type: object
+      required: [id, topicId, unitId, membershipType, enabled]
+      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, unitName: { type: string }, membershipType: { type: string, enum: [LEAD, PARTICIPANT] }, enabled: { type: boolean } }
+    TimeNode:
+      type: object
+      required: [id, name, deadline, sortOrder, enabled]
+      properties: { id: { type: string }, name: { type: string }, deadline: { type: string, format: date }, sortOrder: { type: integer }, enabled: { type: boolean } }
+    IndicatorDefinition:
+      type: object
+      required: [id, code, name, achievementType, unit, category]
+      properties: { id: { type: string }, code: { type: string }, name: { type: string }, achievementType: { type: string, enum: [PAPER, PATENT, COPYRIGHT, STANDARD, TALENT] }, unit: { type: string }, category: { type: string, enum: [BASE, SPECIAL] }, enabled: { type: boolean } }
+    TopicIndicator:
+      type: object
+      required: [id, topicId, nodeId, indicatorDefinitionId, targetQuantity, status, version]
+      properties: { id: { type: string }, topicId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0 }, status: { type: string, enum: [DRAFT, PUBLISHED] }, version: { type: integer } }
+    IndicatorTargetBatch:
+      type: object
+      required: [nodeId, targets]
+      properties: { nodeId: { type: string }, targets: { type: array, items: { type: object, required: [indicatorDefinitionId, targetQuantity], properties: { indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0 } } } } }
+    UnitIndicatorAllocation:
+      type: object
+      required: [id, topicId, unitId, nodeId, indicatorDefinitionId, targetQuantity, status, version]
+      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0 }, status: { type: string, enum: [DRAFT, PUBLISHED] }, version: { type: integer } }
+    UnitAllocationBatch:
+      type: object
+      required: [nodeId, allocations]
+      properties: { nodeId: { type: string }, allocations: { type: array, items: { type: object, required: [unitId, indicatorDefinitionId, targetQuantity], properties: { unitId: { type: string }, indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0 } } } } }
+    Achievement:
+      type: object
+      required: [id, topicId, unitId, nodeId, indicatorDefinitionId, achievementType, title, status, recordVersion, submittedVersion, materials]
+      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, achievementType: { type: string }, title: { type: string }, responsiblePerson: { type: string }, status: { type: string }, countsToIndicator: { type: boolean }, recordVersion: { type: integer }, submittedVersion: { type: integer }, detail: { type: object, additionalProperties: true }, materials: { type: array, items: { $ref: '#/components/schemas/FileObject' } }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    AchievementWriteRequest:
+      type: object
+      required: [topicId, nodeId, indicatorDefinitionId, title, responsiblePerson]
+      properties: { topicId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, title: { type: string }, responsiblePerson: { type: string }, detail: { type: object, additionalProperties: true }, materialFileIds: { type: array, items: { type: string } }, recordVersion: { type: integer } }
+    AchievementActionRequest:
+      type: object
+      required: [action]
+      properties: { action: { type: string, enum: [SUBMIT_PRE_REVIEW, REGISTER_EXTERNAL_SUBMISSION, START_FORMAL, SUBMIT_FORMAL, SUBMIT_SUPPLEMENT] }, externalSubmissionDate: { type: string, format: date }, externalSubmissionNumber: { type: string } }
+    AchievementPage:
+      type: object
+      required: [items, page, size, total]
+      properties: { items: { type: array, items: { $ref: '#/components/schemas/Achievement' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } }
+    AchievementProgress:
+      type: object
+      required: [baseTotals, specialIndicators, rows]
+      properties: { baseTotals: { type: object, additionalProperties: { type: integer } }, specialIndicators: { type: array, items: { type: object, additionalProperties: true } }, rows: { type: array, items: { type: object, additionalProperties: true } } }
+    ReviewRequest:
+      type: object
+      required: [decision]
+      properties: { decision: { type: string, enum: [APPROVE, RETURN] }, opinion: { type: string }, submittedVersion: { type: integer, description: 客户端正在审批的提交版本，用于并发冲突检测 } }
+    ApprovalRecord:
+      type: object
+      required: [id, businessType, businessId, stage, level, decision, operatorId, operatedAt, submittedVersion]
+      properties: { id: { type: string }, businessType: { type: string, enum: [ACHIEVEMENT, REPORT] }, businessId: { type: string }, stage: { type: string }, level: { type: string, enum: [INITIAL, FINAL] }, decision: { type: string, enum: [APPROVED, RETURNED] }, opinion: { type: string }, operatorId: { type: string }, operatedAt: { type: string, format: date-time }, submittedVersion: { type: integer } }
+    SubmissionSnapshot:
+      type: object
+      required: [id, businessType, businessId, stage, submittedVersion, submittedAt, submitterId, payload]
+      properties: { id: { type: string }, businessType: { type: string, enum: [ACHIEVEMENT, REPORT] }, businessId: { type: string }, stage: { type: string }, submittedVersion: { type: integer }, submittedAt: { type: string, format: date-time }, submitterId: { type: string }, payload: { type: object, additionalProperties: true } }
+    ReportType: { type: string, enum: [MONTHLY, QUARTERLY] }
+    ReportRule:
+      type: object
+      required: [effectiveYear, monthlyEnabled, quarterlyEnabled, monthlyOpenDay, monthlyDeadlineDay, quarterlyOpenDay, quarterlyDeadlineDay, quarterlyMonths]
+      properties: { effectiveYear: { type: integer }, monthlyEnabled: { type: boolean }, monthlyOpenDay: { type: integer, minimum: 1, maximum: 31 }, monthlyDeadlineDay: { type: integer, minimum: 1, maximum: 31 }, quarterlyEnabled: { type: boolean }, quarterlyOpenDay: { type: integer, minimum: 1, maximum: 31 }, quarterlyDeadlineDay: { type: integer, minimum: 1, maximum: 31 }, quarterlyMonths: { type: array, items: { type: integer, minimum: 1, maximum: 12 } }, recordVersion: { type: integer } }
+    ReportCreateRequest:
+      type: object
+      required: [topicId, reportType, year, period]
+      properties: { topicId: { type: string }, reportType: { $ref: '#/components/schemas/ReportType' }, year: { type: integer }, period: { type: integer } }
+    ReportContentRequest:
+      type: object
+      required: [milestoneProgress, overallProgress, demonstrationProgress, fundUsage, nextPlan, problemsAndMeasures, recordVersion]
+      properties: { milestoneProgress: { type: string }, overallProgress: { type: string }, demonstrationProgress: { type: string }, fundUsage: { type: string }, nextPlan: { type: string }, problemsAndMeasures: { type: string }, recordVersion: { type: integer } }
+    ProgressReport:
+      allOf:
+        - { $ref: '#/components/schemas/ReportContentRequest' }
+        - type: object
+          required: [id, topicId, reportType, year, period, openDate, deadline, status, submittedVersion]
+          properties: { id: { type: string }, topicId: { type: string }, reportType: { $ref: '#/components/schemas/ReportType' }, year: { type: integer }, period: { type: integer }, openDate: { type: string, format: date }, deadline: { type: string, format: date }, status: { type: string, enum: [DRAFT, INITIAL_REVIEW, FINAL_REVIEW, APPROVED, RETURNED] }, overdue: { type: boolean }, submittedVersion: { type: integer }, submittedAt: { type: [string, 'null'], format: date-time } }
+    ReportPage:
+      type: object
+      required: [items, page, size, total]
+      properties: { items: { type: array, items: { $ref: '#/components/schemas/ProgressReport' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } }
+    ArchiveDirectory:
+      type: object
+      required: [topicId, unitId, folderCount, completedCount, completionRate]
+      properties: { topicId: { type: string }, topicName: { type: string }, unitId: { type: string }, unitName: { type: string }, folderCount: { type: integer }, completedCount: { type: integer }, completionRate: { type: number } }
+    ArchiveFolder:
+      type: object
+      required: [id, name, ownerType, required, requiredQuantity, custom, fileCount, completed]
+      properties: { id: { type: string }, topicId: { type: [string, 'null'] }, unitId: { type: [string, 'null'] }, ownerType: { type: string, enum: [TOPIC_NATIONAL, SELF_FUNDED] }, ownerId: { type: string }, name: { type: string }, required: { type: boolean }, requiredQuantity: { type: integer }, custom: { type: boolean }, fileCount: { type: integer }, completed: { type: boolean } }
+    SelfFundedProjectRequest:
+      type: object
+      required: [topicId, code, name, projectType, principalName]
+      properties: { topicId: { type: string }, code: { type: string }, name: { type: string }, projectType: { type: string, enum: [TECHNOLOGY, RENOVATION, INFRASTRUCTURE] }, principalName: { type: string }, startDate: { type: string, format: date }, endDate: { type: string, format: date }, budget: { type: number }, status: { type: string }, recordVersion: { type: integer } }
+    SelfFundedProject:
+      allOf:
+        - { $ref: '#/components/schemas/SelfFundedProjectRequest' }
+        - type: object
+          required: [id, ownerUnitId, templateSnapshotId]
+          properties: { id: { type: string }, ownerUnitId: { type: string }, templateSnapshotId: { type: string }, completionRate: { type: number } }
+    ArchiveProgress:
+      type: object
+      required: [topicId, unitId, ownerType, requiredCount, completedCount, completionRate]
+      properties: { topicId: { type: string }, unitId: { type: string }, ownerType: { type: string }, requiredCount: { type: integer }, completedCount: { type: integer }, completionRate: { type: number } }
+    UploadTicketRequest:
+      type: object
+      required: [fileName, size, contentType, businessType]
+      properties: { fileName: { type: string }, size: { type: integer, format: int64, minimum: 1 }, contentType: { type: string }, sha256: { type: string }, businessType: { type: string, enum: [ACHIEVEMENT, ARCHIVE] } }
+    UploadTicket:
+      type: object
+      required: [fileId, uploadUrl, method, expiresAt]
+      properties: { fileId: { type: string }, uploadUrl: { type: string, format: uri }, method: { type: string, enum: [PUT, POST] }, headers: { type: object, additionalProperties: { type: string } }, expiresAt: { type: string, format: date-time } }
+    FileObject:
+      type: object
+      required: [id, originalName, size, contentType, status, uploaderId, createdAt]
+      properties: { id: { type: string }, originalName: { type: string }, size: { type: integer, format: int64 }, contentType: { type: string }, sha256: { type: string }, status: { type: string, enum: [PENDING, READY, DELETED] }, uploaderId: { type: string }, createdAt: { type: string, format: date-time } }
+    SignedUrl:
+      type: object
+      required: [url, expiresAt]
+      properties: { url: { type: string, format: uri }, expiresAt: { type: string, format: date-time } }

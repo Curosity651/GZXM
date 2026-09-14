@@ -8,7 +8,7 @@ const { Text } = Typography;
 
 export function IndicatorMonitoringPage() {
   const state = useAppStore();
-  const summaries = buildUnitTopicSummaries(state.topics, state.units, state.topicMemberships, state.topicIndicators, state.unitIndicatorAllocations, state.achievements, state.currentUser!);
+  const summaries = buildUnitTopicSummaries(state.topics, state.units, state.topicMemberships, state.topicIndicators, state.unitIndicatorAllocations, state.achievements, state.currentUser!, state.nodes, state.indicatorDefinitions);
   const visibleTopicIds = new Set(summaries.map((item) => item.topicId));
   const visibleUnitKeys = new Set(summaries.map((item) => `${item.topicId}:${item.unitId}`));
   const effective = state.achievements.filter((item) => visibleTopicIds.has(item.topicId) && visibleUnitKeys.has(`${item.topicId}:${item.uploadUnitId ?? item.unitId}`) && item.status === '已生效');

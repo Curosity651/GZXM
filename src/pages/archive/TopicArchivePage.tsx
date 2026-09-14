@@ -3,8 +3,8 @@ import { Button, Card, Col, Drawer, Form, Input, message, Modal, Progress, Row, 
 import { DeleteOutlined, FileAddOutlined, FolderOpenOutlined, TeamOutlined } from '@ant-design/icons';
 import { useAppStore } from '../../store';
 import { canPerform } from '../../domain/permissions';
-import { accessibleTopics, canViewAllTopicUnitData, isGlobalUser } from '../../domain/topic-access';
-import { archiveCompletion, isArchiveRequirementComplete } from '../../domain/archive';
+import { accessibleTopics, canViewAllTopicUnitData, isGlobalUser, isTopicOperational } from '../../domain/topic-access';
+import { archiveCompletion, isArchiveRequirementComplete, topicArchiveRequirements } from '../../domain/archive';
 import { ArchiveFolderFileList } from '../../components/archive/ArchiveFolderFileList';
 import type { ArchiveRequirement, TopicUnitMembership } from '../../types';
 
@@ -21,8 +21,7 @@ export function TopicArchivePage() {
   const [form] = Form.useForm<{ name: string }>();
 
   const canManageFolders = canPerform(user, state.roles, 'archive.topic.submit') && Boolean(user.unitId);
-  const requirements = state.archiveRequirements.filter((item) => item.ownerType === 'TOPIC_NATIONAL');
-  const getFolders = (topicId: string) => requirements.filter((item) => !item.templateId && (!item.topicId || item.topicId === topicId));
+  const getFolders = (topicId: string, unitId: string) => topicArchiveRequirements(state.archiveRequirements, topicId, unitId);
   const getTopicMembers = (topicId: string) => state.topicMemberships.filter((item) => item.topicId === topicId && item.enabled);
   const getVisibleMembers = (topicId: string) => {
     const members = getTopicMembers(topicId);
@@ -36,8 +35,7 @@ export function TopicArchivePage() {
   const getUnitFileCount = (topicId: string, unitId: string) => getUnitSubmissions(topicId, unitId)
     .reduce((total, item) => total + (item.files?.length || item.fileIds.length), 0);
   const getAggregateCompletion = (topicId: string, members: TopicUnitMembership[]) => {
-    const folders = getFolders(topicId);
-    const totals = members.map((member) => archiveCompletion(folders, getUnitSubmissions(topicId, member.unitId)));
+    const totals = members.map((member) => archiveCompletion(getFolders(topicId, member.unitId), getUnitSubmissions(topicId, member.unitId)));
     const required = totals.reduce((sum, item) => sum + item.required, 0);
     const completed = totals.reduce((sum, item) => sum + item.completed, 0);
     return { required, completed, rate: required === 0 ? 100 : Math.round((completed / required) * 100) };
@@ -56,7 +54,7 @@ export function TopicArchivePage() {
     : selectedMembers;
   const selectedUnit = state.units.find((item) => item.id === selectedUnitId);
   const selectedMembership = selectedMembers.find((item) => item.unitId === selectedUnitId);
-  const canManageSelectedUnit = canManageFolders && selectedUnitId === user.unitId;
+  const canManageSelectedUnit = canManageFolders && isTopicOperational(selectedTopic) && selectedUnitId === user.unitId;
 
   const resetDrillDown = () => {
     setSelectedTopicId(undefined);
@@ -65,18 +63,24 @@ export function TopicArchivePage() {
   };
 
   const submitFolder = async () => {
+    if (!selectedTopicId || !selectedUnitId || selectedUnitId !== user.unitId) return message.warning('只能在本单位材料中新增文件夹');
     const { name } = await form.validateFields();
-    state.addArchiveRequirement({
-      id: `ar-topic-custom-${Date.now()}`,
-      projectId: 'p1',
-      categoryId: 'ac-1',
-      topicId: selectedTopicId,
-      name,
-      required: true,
-      requiredQuantity: 1,
-      ownerType: 'TOPIC_NATIONAL',
-      requirementKind: 'REQUIRED',
-    });
+    try {
+      state.addArchiveRequirement({
+        id: `ar-topic-custom-${Date.now()}`,
+        projectId: state.project.id,
+        categoryId: 'ac-1',
+        topicId: selectedTopicId,
+        unitId: selectedUnitId,
+        name: name.trim(),
+        required: true,
+        requiredQuantity: 1,
+        ownerType: 'TOPIC_NATIONAL',
+        requirementKind: 'REQUIRED',
+      }, user.id);
+    } catch (error) {
+      return message.warning(error instanceof Error ? error.message : '无法创建文件夹');
+    }
     setAddFolderOpen(false);
     form.resetFields();
     message.success('自定义材料文件夹已创建');
@@ -84,6 +88,8 @@ export function TopicArchivePage() {
 
   const removeFolder = (folder: ArchiveRequirement) => {
     if (folder.sourceCode) return;
+    const hasFiles = state.archiveSubmissions.some((item) => item.requirementId === folder.id && ((item.files?.length ?? 0) > 0 || item.fileIds.length > 0));
+    if (hasFiles) return message.warning('该文件夹中已有材料，请先删除文件后再删除文件夹');
     Modal.confirm({
       title: '删除自定义文件夹',
       content: `确定删除“${folder.name}”吗？`,
@@ -91,9 +97,13 @@ export function TopicArchivePage() {
       okType: 'danger',
       cancelText: '取消',
       onOk: () => {
-        state.removeArchiveRequirement(folder.id);
-        if (selectedFolder?.id === folder.id) setSelectedFolder(null);
-        message.success('文件夹已删除');
+        try {
+          state.removeArchiveRequirement(folder.id, user.id);
+          if (selectedFolder?.id === folder.id) setSelectedFolder(null);
+          message.success('文件夹已删除');
+        } catch (error) {
+          message.warning(error instanceof Error ? error.message : '无法删除文件夹');
+        }
       },
     });
   };
@@ -133,7 +143,7 @@ export function TopicArchivePage() {
   const unitDirectoryCard = (member: TopicUnitMembership) => {
     if (!selectedTopic) return null;
     const unit = state.units.find((item) => item.id === member.unitId);
-    const folders = getFolders(selectedTopic.id);
+    const folders = getFolders(selectedTopic.id, member.unitId);
     const completion = archiveCompletion(folders, getUnitSubmissions(selectedTopic.id, member.unitId));
     const fileCount = getUnitFileCount(selectedTopic.id, member.unitId);
     const editable = canManageFolders && member.unitId === user.unitId;
@@ -186,7 +196,7 @@ export function TopicArchivePage() {
       <Row gutter={[16, 16]}>
         {visibleTopics.map((topic) => {
           const visibleMembers = getVisibleMembers(topic.id).filter((item) => !unitFilter || item.unitId === unitFilter);
-          const folders = getFolders(topic.id);
+          const sharedFolderCount = state.archiveRequirements.filter((item) => item.ownerType === 'TOPIC_NATIONAL' && item.sourceCode && (!item.topicId || item.topicId === topic.id)).length;
           const completion = getAggregateCompletion(topic.id, visibleMembers);
           return <Col xs={24} xl={12} key={topic.id}>
             <Card
@@ -197,7 +207,7 @@ export function TopicArchivePage() {
             >
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Space wrap><Tag color="blue">{topic.code}</Tag><Tag>承担单位 {visibleMembers.length} 家</Tag></Space>
-                <div>每家单位材料文件夹：{folders.length} 个</div>
+                <div>国家清单文件夹：{sharedFolderCount} 个</div>
                 <Progress percent={completion.rate} status={completion.rate < 50 ? 'exception' : 'active'} />
                 <div>{completion.completed}/{completion.required} 项必存材料已提交</div>
               </Space>
@@ -231,7 +241,7 @@ export function TopicArchivePage() {
         </Space>
       </div>}
       <Row gutter={[16, 16]}>
-        {selectedTopic && selectedUnitId && getFolders(selectedTopic.id).map((folder) => folderCard(folder, selectedTopic.id, selectedUnitId))}
+        {selectedTopic && selectedUnitId && getFolders(selectedTopic.id, selectedUnitId).map((folder) => folderCard(folder, selectedTopic.id, selectedUnitId))}
       </Row>
     </Drawer>
 

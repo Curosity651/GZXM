@@ -21,9 +21,9 @@ describe('成果进度与成果记录可见范围', () => {
     expect(canViewAchievement(user('外部课题单位', 'unit-a'), achievement, memberships)).toBe(true);
   });
 
-  it('承担单位只查看自己单位的成果，系统管理员不参与业务进度', () => {
+  it('承担单位只查看自己单位的成果，系统管理员只读查看全部成果', () => {
     expect(canViewAchievement(user('外部课题单位', 'unit-b'), achievement, memberships)).toBe(true);
     expect(canViewAchievement(user('外部课题单位', 'unit-c'), achievement, memberships)).toBe(false);
-    expect(canViewAchievement(user('系统管理员', 'unit-a'), achievement, memberships)).toBe(false);
+    expect(canViewAchievement(user('系统管理员', 'unit-a'), achievement, memberships)).toBe(true);
   });
 });

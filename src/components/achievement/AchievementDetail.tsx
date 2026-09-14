@@ -31,6 +31,7 @@ export function AchievementDetail({ achievement, topics, units, records, users }
       { key: 'unit', label: '上传单位', children: unit?.name ?? '—' },
       { key: 'type', label: '成果类型', children: <Tag color="blue">{achievement.achievementType}</Tag> },
       { key: 'status', label: '当前状态', children: <StatusTag status={achievement.status} /> },
+      { key: 'version', label: '版本', children: <Space><Tag>记录 V{achievement.recordVersion ?? 1}</Tag><Tag color="blue">提交 V{achievement.submittedVersion ?? 0}</Tag></Space> },
       { key: 'owner', label: '负责人', children: achievement.responsiblePerson },
       { key: 'number', label: '投稿/申请编号', children: achievement.externalSubmissionNumber || achievement.applicationNumber || achievement.registrationNumber || '—' },
       ...specialItems,

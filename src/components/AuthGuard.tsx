@@ -1,9 +1,10 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { Result } from 'antd';
 import { useAppStore } from '../store';
-import { canViewPage, type PageKey } from '../domain/permissions';
+import { canViewPage, getRole, type PageKey } from '../domain/permissions';
 
 const routePermissions: Record<string, PageKey> = {
+  '/': 'home',
   '/indicator': 'topic-indicator',
   '/indicator/topic': 'topic-indicator',
   '/achievement-entry': 'achievement-entry',
@@ -15,6 +16,7 @@ const routePermissions: Record<string, PageKey> = {
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const currentUser = useAppStore((s) => s.currentUser);
+  const users = useAppStore((s) => s.users);
   const roles = useAppStore((s) => s.roles);
   const location = useLocation();
 
@@ -22,8 +24,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  const page = routePermissions[location.pathname] ?? Object.entries(routePermissions).find(([path]) => location.pathname.startsWith(`${path}/`))?.[1];
-  if (page && !canViewPage(currentUser, roles, page)) {
+  const effectiveUser = users.find((user) => user.id === currentUser.id);
+  const role = getRole(effectiveUser, roles);
+  if (!effectiveUser?.enabled || !role?.enabled) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const page = routePermissions[location.pathname] ?? Object.entries(routePermissions).find(([path]) => path !== '/' && location.pathname.startsWith(`${path}/`))?.[1];
+  if (page && !canViewPage(effectiveUser, roles, page)) {
     return <Result status="403" title="无权访问" subTitle="当前角色没有该页面权限，请从左侧菜单进入可用功能。" />;
   }
 

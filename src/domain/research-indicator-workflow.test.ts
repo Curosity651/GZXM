@@ -71,7 +71,7 @@ describe('科研指标模块权限流程', () => {
     const row = store.getState().unitIndicatorAllocations.find((item) => item.topicId === 't1')!;
 
     expect(() => store.getState().saveUnitAllocations([{ ...row, targetQuantity: row.targetQuantity + 1 }], participant.id))
-      .toThrow('只有该课题牵头单位可以编辑单位指标分配');
+      .toThrow('只有该课题牵头单位可以编辑正常实施课题的单位指标分配');
     expect(() => store.getState().saveUnitAllocations([{ ...row, targetQuantity: row.targetQuantity + 1 }], topicLead.id))
       .not.toThrow();
   });

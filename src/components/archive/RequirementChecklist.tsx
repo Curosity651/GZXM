@@ -1,10 +1,10 @@
 import { Button, Input, Progress, Select, Space, Table, Tag, Upload, message } from 'antd';
 import { DeleteOutlined, DownloadOutlined, EyeOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons';
-import type { ArchiveOwnerType } from '../../domain/archive-flow';
+import type { ArchiveOwnerType } from '../../domain/archive';
 import type { ArchiveRequirement, ArchiveSubmission } from '../../types';
 import { useAppStore } from '../../store';
 import { archiveCompletion } from '../../domain/archive';
-import { validateApplicability } from '../../domain/archive-flow';
+import { validateApplicability } from '../../domain/archive';
 import { StatusTag } from '../common/StatusTag';
 
 export function RequirementChecklist({ requirements, ownerType, ownerId, topicId, unitId, editable }: {

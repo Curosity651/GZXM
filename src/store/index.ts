@@ -4,9 +4,9 @@ import { persist } from 'zustand/middleware';
 import type { StateCreator } from 'zustand';
 import type {
   Achievement, ApprovalRecord, ArchiveCategory, ArchiveMaterial, ArchiveRequirement, ArchiveSubmission,
-  IndicatorConfig, ProgressReport, Project, ProjectUnit, ReportTask, ReportSubmissionRule, SelfFundedProject, TimeNode, Topic,
+  IndicatorConfig, ProgressReport, Project, ProjectUnit, ReportTask, SelfFundedProject, TimeNode, Topic,
   TopicPowerGridRequirement, User, UserRole, WarningRule, RbacRole, IndicatorDefinition,
-  TopicIndicator, TopicUnitMembership, UnitIndicatorAllocation,
+  TopicIndicator, TopicUnitMembership, UnitIndicatorAllocation, SubmissionSnapshot,
 } from '../types';
 import {
   MOCK_ACHIEVEMENTS, MOCK_APPROVAL_RECORDS, MOCK_ARCHIVE_CATEGORIES, MOCK_ARCHIVE_MATERIALS,
@@ -14,14 +14,12 @@ import {
   MOCK_REPORT_TASKS, MOCK_SELF_FUNDED_PROJECTS, MOCK_TIME_NODES, MOCK_TOPICS,
   MOCK_TOPIC_POWER_GRID_REQUIREMENTS, MOCK_UNITS, MOCK_USERS, MOCK_WARNING_RULES, MOCK_WORKFLOW_ACHIEVEMENTS, MOCK_ROLES,
   MOCK_INDICATOR_DEFINITIONS, MOCK_TOPIC_INDICATORS, MOCK_TOPIC_MEMBERSHIPS, MOCK_UNIT_INDICATOR_ALLOCATIONS,
-  MOCK_REPORT_RULES,
 } from '../data/mock';
 import { nextAchievementStatus, type AchievementAction } from '../domain/workflows';
-import { nextReportStatus, type ReportAction } from '../domain/report-flow';
-import { nextArchiveStatus, type ArchiveAction } from '../domain/archive-flow';
+import { isReportEditable, nextReportStatus, type ReportAction } from '../domain/report-flow';
 import { canPerform, filterByTopicScope, getRole } from '../domain/permissions';
-import { generateReportTasks } from '../domain/reporting';
-import { canAccessTopicByMembership, isInternalTopicUnit, isTopicLead } from '../domain/topic-access';
+import { createDefaultTopicReportConfig, isReportOpen, isReportOverdue, topicReportWindow } from '../domain/reporting';
+import { canAccessTopicByMembership, isInternalTopicUnit, isTopicLead, isTopicOperational } from '../domain/topic-access';
 
 export interface AppData {
   project: Project;
@@ -36,8 +34,8 @@ export interface AppData {
   warningRules: WarningRule[];
   achievements: Achievement[];
   approvalRecords: ApprovalRecord[];
+  submissionSnapshots: SubmissionSnapshot[];
   reportTasks: ReportTask[];
-  reportRules: ReportSubmissionRule[];
   reports: ProgressReport[];
   selfFundedProjects: SelfFundedProject[];
   archiveCategories: ArchiveCategory[];
@@ -72,35 +70,28 @@ export interface AppState extends AppData {
   saveTopicMembership: (membership: TopicUnitMembership, operatorId: string) => void;
   toggleTopicMembership: (id: string, enabled: boolean, operatorId: string) => void;
   saveUnitAllocations: (rows: UnitIndicatorAllocation[], operatorId: string) => void;
-  publishUnitAllocations: (topicId: string, operatorId: string) => void;
+  publishUnitAllocations: (topicId: string, nodeId: string, operatorId: string) => void;
   updateWarningRule: (id: string, updates: Partial<WarningRule>) => void;
-  addAchievement: (achievement: Achievement) => void;
-  updateAchievement: (id: string, updates: Partial<Achievement>) => void;
-  lockAchievement: (id: string) => void;
-  submitAchievement: (id: string) => void;
-  approveAchievement: (id: string, payload: Partial<Achievement>, approver: string) => void;
-  rejectAchievement: (id: string, reason: string, approver: string) => void;
-  returnAchievement: (id: string, reason: string, approver: string) => void;
+  addAchievement: (achievement: Achievement, operatorId: string) => void;
+  updateAchievement: (id: string, updates: Partial<Achievement>, operatorId: string) => void;
   advanceAchievement: (id: string, action: AchievementAction, operatorId: string) => void;
   reviewAchievement: (id: string, action: AchievementAction, operatorId: string, opinion: string) => void;
-  saveReport: (report: ProgressReport) => void;
-  saveReportTask: (task: ReportTask) => void;
-  saveReportRule: (rule: ReportSubmissionRule) => void;
+  saveReport: (report: ProgressReport, operatorId: string) => void;
+  saveReportTask: (task: ReportTask, operatorId: string) => void;
   submitReport: (id: string, operatorId: string) => void;
   reviewReport: (id: string, action: ReportAction, operatorId: string, opinion: string) => void;
   addSelfFundedProject: (project: SelfFundedProject, operatorId: string) => void;
   saveArchiveSubmission: (submission: ArchiveSubmission, operatorId: string) => void;
   submitArchive: (id: string, operatorId: string) => void;
-  reviewArchive: (id: string, action: ArchiveAction, operatorId: string, opinion: string) => void;
   addArchiveCategory: (category: ArchiveCategory) => void;
   updateArchiveCategory: (id: string, updates: Partial<ArchiveCategory>) => void;
   removeArchiveCategory: (id: string) => void;
   addArchiveMaterial: (material: ArchiveMaterial) => void;
   updateArchiveMaterial: (id: string, updates: Partial<ArchiveMaterial>) => void;
   removeArchiveMaterial: (id: string) => void;
-  addArchiveRequirement: (req: ArchiveRequirement) => void;
+  addArchiveRequirement: (req: ArchiveRequirement, operatorId: string) => void;
   updateArchiveRequirement: (id: string, updates: Partial<ArchiveRequirement>) => void;
-  removeArchiveRequirement: (id: string) => void;
+  removeArchiveRequirement: (id: string, operatorId: string) => void;
   addPowerGridReq: (req: TopicPowerGridRequirement) => void;
   updatePowerGridReq: (id: string, updates: Partial<TopicPowerGridRequirement>) => void;
   removePowerGridReq: (id: string) => void;
@@ -129,8 +120,14 @@ export function createInitialState(): AppData {
     const membership = MOCK_TOPIC_MEMBERSHIPS.find((item) => item.topicId === achievement.topicId && item.unitId === achievement.unitId);
     const generalDefinition = MOCK_INDICATOR_DEFINITIONS.find((item) => item.name === achievement.achievementType);
     const allocation = MOCK_UNIT_INDICATOR_ALLOCATIONS.find((item) => item.topicId === achievement.topicId && item.unitId === achievement.unitId && item.indicatorDefinitionId === (achievement.indicatorDefinitionId ?? generalDefinition?.id));
-    return { ...achievement, status, countsToIndicator: status === '已生效', uploadUnitId: achievement.uploadUnitId ?? achievement.unitId, topicUnitMembershipId: achievement.topicUnitMembershipId ?? membership?.id, unitIndicatorAllocationId: achievement.unitIndicatorAllocationId ?? allocation?.id, recordVersion: achievement.recordVersion ?? 1, history: achievement.history ?? [] };
+    const submittedVersion = achievement.submittedVersion ?? (['预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(status) ? 0 : 1);
+    return { ...achievement, status, countsToIndicator: status === '已生效', uploadUnitId: achievement.uploadUnitId ?? achievement.unitId, topicUnitMembershipId: achievement.topicUnitMembershipId ?? membership?.id, unitIndicatorAllocationId: achievement.unitIndicatorAllocationId ?? allocation?.id, recordVersion: achievement.recordVersion ?? 1, submittedVersion, history: achievement.history ?? [] };
   });
+  const normalizedReports = MOCK_REPORTS.map((report): ProgressReport => ({
+    ...report,
+    recordVersion: report.recordVersion ?? report.version ?? 1,
+    submittedVersion: report.submittedVersion ?? (report.status === '草稿' || report.status === '退回修改' ? 0 : 1),
+  }));
   return structuredClone({
     project: MOCK_PROJECT,
     units: MOCK_UNITS,
@@ -144,9 +141,9 @@ export function createInitialState(): AppData {
     warningRules: MOCK_WARNING_RULES,
     achievements: normalizedAchievements,
     approvalRecords: MOCK_APPROVAL_RECORDS,
+    submissionSnapshots: [],
     reportTasks: MOCK_REPORT_TASKS,
-    reportRules: MOCK_REPORT_RULES,
-    reports: MOCK_REPORTS,
+    reports: normalizedReports,
     selfFundedProjects: MOCK_SELF_FUNDED_PROJECTS,
     archiveCategories: MOCK_ARCHIVE_CATEGORIES,
     archiveMaterials: MOCK_ARCHIVE_MATERIALS,
@@ -236,17 +233,18 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   saveIndicatorDefinition: (definition) => set((state) => ({ indicatorDefinitions: state.indicatorDefinitions.some((item) => item.id === definition.id) ? state.indicatorDefinitions.map((item) => item.id === definition.id ? definition : item) : [...state.indicatorDefinitions, definition] })),
   saveTopicIndicators: (rows, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!operator || !canPerform(operator, get().roles, 'topic-indicator.publish')) throw new Error('没有编辑课题总体指标的权限');
+    const topic = get().topics.find((item) => item.id === rows[0]?.topicId);
+    if (!operator || !isTopicOperational(topic) || !canPerform(operator, get().roles, 'topic-indicator.publish')) throw new Error('没有编辑课题总体指标的权限，或课题当前不可操作');
     set((state) => ({ topicIndicators: [...state.topicIndicators.filter((item) => !rows.some((row) => row.id === item.id)), ...rows] }));
   },
   publishTopicIndicators: (topicId, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!operator || !canPerform(operator, get().roles, 'topic-indicator.publish')) throw new Error('没有下发课题总体指标的权限');
+    if (!operator || !isTopicOperational(get().topics.find((item) => item.id === topicId)) || !canPerform(operator, get().roles, 'topic-indicator.publish')) throw new Error('没有下发课题总体指标的权限，或课题当前不可操作');
     set((state) => ({ topicIndicators: state.topicIndicators.map((item) => item.topicId === topicId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operator.name, updatedAt: today() } : item) }));
   },
   saveTopicMembership: (membership, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
-    const allowed = Boolean(operator && (canPerform(operator, get().roles, 'topic.manage') || (canPerform(operator, get().roles, 'topic-unit.manage') && isTopicLead(operator, membership.topicId, get().topicMemberships))));
+    const allowed = Boolean(operator && isTopicOperational(get().topics.find((item) => item.id === membership.topicId)) && (canPerform(operator, get().roles, 'topic.manage') || (canPerform(operator, get().roles, 'topic-unit.manage') && isTopicLead(operator, membership.topicId, get().topicMemberships))));
     if (!allowed) throw new Error('没有维护该课题承担单位的权限');
     set((state) => ({
       topicMemberships: state.topicMemberships.some((item) => item.id === membership.id) ? state.topicMemberships.map((item) => item.id === membership.id ? membership : item) : [...state.topicMemberships, membership],
@@ -256,7 +254,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   toggleTopicMembership: (id, enabled, operatorId) => {
     const membership = get().topicMemberships.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
-    const allowed = Boolean(membership && operator && (canPerform(operator, get().roles, 'topic.manage') || (canPerform(operator, get().roles, 'topic-unit.manage') && isTopicLead(operator, membership.topicId, get().topicMemberships))));
+    const allowed = Boolean(membership && operator && isTopicOperational(get().topics.find((item) => item.id === membership.topicId)) && (canPerform(operator, get().roles, 'topic.manage') || (canPerform(operator, get().roles, 'topic-unit.manage') && isTopicLead(operator, membership.topicId, get().topicMemberships))));
     if (!allowed) throw new Error('没有维护该课题承担单位的权限');
     set((state) => {
       const membership = state.topicMemberships.find((item) => item.id === id);
@@ -274,39 +272,57 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   saveUnitAllocations: (rows, operatorId) => {
     const topicId = rows[0]?.topicId;
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!topicId || !operator || !canPerform(operator, get().roles, 'unit-allocation.manage') || !isTopicLead(operator, topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以编辑单位指标分配');
+    if (!topicId || !operator || !isTopicOperational(get().topics.find((item) => item.id === topicId)) || !canPerform(operator, get().roles, 'unit-allocation.manage') || !isTopicLead(operator, topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以编辑正常实施课题的单位指标分配');
     set((state) => ({ unitIndicatorAllocations: [...state.unitIndicatorAllocations.filter((item) => !rows.some((row) => row.id === item.id)), ...rows] }));
   },
-  publishUnitAllocations: (topicId, operatorId) => {
+  publishUnitAllocations: (topicId, nodeId, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!operator || !canPerform(operator, get().roles, 'unit-allocation.publish') || !isTopicLead(operator, topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以下发单位指标分配');
-    set((state) => ({ unitIndicatorAllocations: state.unitIndicatorAllocations.map((item) => item.topicId === topicId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operator.name, updatedAt: today() } : item) }));
+    if (!operator || !isTopicOperational(get().topics.find((item) => item.id === topicId)) || !canPerform(operator, get().roles, 'unit-allocation.publish') || !isTopicLead(operator, topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以下发正常实施课题的单位指标分配');
+    set((state) => ({ unitIndicatorAllocations: state.unitIndicatorAllocations.map((item) => item.topicId === topicId && item.nodeId === nodeId ? { ...item, status: '已下发', version: item.version + 1, publishedAt: new Date().toISOString(), publishedBy: operator.name, updatedAt: today() } : item) }));
   },
   updateWarningRule: (id, updates) => set((state) => ({ warningRules: state.warningRules.map((rule) => rule.id === id ? { ...rule, ...updates } : rule) })),
-  addAchievement: (achievement) => set((state) => ({ achievements: [...state.achievements, achievement] })),
-  updateAchievement: (id, updates) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, ...updates, updatedAt: today() } : achievement) })),
-  lockAchievement: (id) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '已提交', submittedAt: today(), updatedAt: today() } : achievement) })),
-  submitAchievement: (id) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '已提交', submittedAt: today(), updatedAt: today() } : achievement) })),
-  approveAchievement: (id, payload, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, ...payload, status: '审批通过', countsToIndicator: true, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
-  rejectAchievement: (id, reason, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '审批不通过', countsToIndicator: false, approvalOpinion: reason, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
-  returnAchievement: (id, reason, approver) => set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, status: '退回修改', countsToIndicator: false, approvalOpinion: reason, approver, approvedAt: today(), updatedAt: today() } : achievement) })),
+  addAchievement: (achievement, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!operator || !isTopicOperational(get().topics.find((item) => item.id === achievement.topicId)) || !canPerform(operator, get().roles, 'achievement.submit') || !canAccessTopicByMembership(operator, achievement.topicId, get().topicMemberships) || (achievement.uploadUnitId ?? achievement.unitId) !== operator.unitId) throw new Error('没有在该课题新增成果的权限');
+    set((state) => ({ achievements: [...state.achievements, { ...achievement, recordVersion: achievement.recordVersion ?? 1, submittedVersion: achievement.submittedVersion ?? 0 }] }));
+  },
+  updateAchievement: (id, updates, operatorId) => {
+    const current = get().achievements.find((item) => item.id === id);
+    const operator = get().users.find((item) => item.id === operatorId);
+    if (!current || !operator || !isTopicOperational(get().topics.find((item) => item.id === current.topicId)) || !canPerform(operator, get().roles, 'achievement.submit') || !canAccessTopicByMembership(operator, current.topicId, get().topicMemberships) || (current.uploadUnitId ?? current.unitId) !== operator.unitId) throw new Error('没有修改该课题成果的权限');
+    set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? { ...achievement, ...updates, recordVersion: (achievement.recordVersion ?? 0) + 1, updatedAt: today() } : achievement) }));
+  },
   advanceAchievement: (id, action, operatorId) => {
     const current = get().achievements.find((achievement) => achievement.id === id);
     const operator = get().users.find((user) => user.id === operatorId);
-    if (!current || !operator) throw new Error('成果或操作人不存在');
+    if (!current || !operator || !isTopicOperational(get().topics.find((item) => item.id === current.topicId))) throw new Error('成果、操作人不存在或课题当前不可操作');
     if (!canPerform(operator, get().roles, 'achievement.submit') || !canAccessTopicByMembership(operator, current.topicId, get().topicMemberships) || (current.uploadUnitId ?? current.unitId) !== operator.unitId) throw new Error('没有该课题成果的提交权限');
     if (!['SUBMIT_PRE_REVIEW', 'REGISTER_EXTERNAL_SUBMISSION', 'START_FORMAL', 'SUBMIT_FORMAL', 'SUBMIT_SUPPLEMENT'].includes(action)) throw new Error('该动作不是成果提交动作');
     const nextStatus = nextAchievementStatus(current.status as Parameters<typeof nextAchievementStatus>[0], action, current.achievementType);
-    set((state) => ({ achievements: state.achievements.map((achievement) => achievement.id === id ? {
-      ...achievement, status: nextStatus, submittedAt: action.startsWith('SUBMIT') ? today() : achievement.submittedAt,
-      updatedAt: today(), countsToIndicator: false, recordVersion: (achievement.recordVersion ?? 0) + 1,
-      materials: action.startsWith('SUBMIT') ? achievement.materials.map((material) => material.status === '未提交' ? { ...material, status: '待审核' } : material) : achievement.materials,
-      history: [...(achievement.history ?? []), { id: `history-${Date.now()}-${id}`, action, fromStatus: achievement.status, toStatus: nextStatus, operatorId, operatorName: operator.name, operatedAt: new Date().toISOString(), version: (achievement.recordVersion ?? 0) + 1 }],
-    } : achievement) }));
+    const isSubmission = action.startsWith('SUBMIT');
+    const operatedAt = new Date().toISOString();
+    set((state) => {
+      const updated = { ...current, status: nextStatus, submittedAt: isSubmission ? today() : current.submittedAt,
+        updatedAt: today(), countsToIndicator: false, recordVersion: (current.recordVersion ?? 0) + 1,
+        submittedVersion: isSubmission ? (current.submittedVersion ?? 0) + 1 : current.submittedVersion ?? 0,
+        materials: isSubmission ? current.materials.map((material) => material.status === '未提交' ? { ...material, status: '待审核' as const } : material) : current.materials,
+        history: [...(current.history ?? []), { id: `history-${Date.now()}-${id}`, action, fromStatus: current.status, toStatus: nextStatus, operatorId, operatorName: operator.name, operatedAt, version: (current.recordVersion ?? 0) + 1 }],
+      };
+      const snapshot: SubmissionSnapshot | undefined = isSubmission ? {
+        id: `snapshot-achievement-${Date.now()}-${id}`, businessType: 'ACHIEVEMENT', businessId: id,
+        stage: action === 'SUBMIT_PRE_REVIEW' ? 'PRE_REVIEW' : action === 'SUBMIT_SUPPLEMENT' ? 'SUPPLEMENT' : 'FORMAL',
+        submittedVersion: updated.submittedVersion, submittedAt: operatedAt, submitterId: operatorId,
+        payload: structuredClone(updated),
+      } : undefined;
+      return {
+        achievements: state.achievements.map((achievement) => achievement.id === id ? updated : achievement),
+        submissionSnapshots: snapshot ? [...state.submissionSnapshots, snapshot] : state.submissionSnapshots,
+      };
+    });
   },
   reviewAchievement: (id, action, operatorId, opinion) => {
     const current = get().achievements.find((achievement) => achievement.id === id);
-    if (!current) throw new Error('成果不存在');
+    if (!current || !isTopicOperational(get().topics.find((item) => item.id === current.topicId))) throw new Error('成果不存在或课题当前不可操作');
     const operator = get().users.find((user) => user.id === operatorId);
     if (!operator) throw new Error('审批人不存在');
     const atFinalLevel = current.status.includes('终审中');
@@ -321,7 +337,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
       stage: current.status.startsWith('预审') ? 'PRE_REVIEW' : current.status.startsWith('补充') ? 'SUPPLEMENT' : 'FORMAL',
       level: action === 'APPROVE_FINAL' || atFinalLevel ? 'FINAL' : 'INITIAL',
       decision: action === 'RETURN' ? 'RETURNED' : 'APPROVED',
-      opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: 1,
+      opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: current.submittedVersion ?? 1,
     };
     set((state) => ({
       achievements: state.achievements.map((achievement) => achievement.id === id ? {
@@ -336,28 +352,62 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
       approvalRecords: [...state.approvalRecords, record],
     }));
   },
-  saveReport: (report) => set((state) => ({
-    reports: state.reports.some((item) => item.id === report.id)
-      ? state.reports.map((item) => item.id === report.id ? report : item)
-      : [...state.reports, report],
-  })),
-  saveReportTask: (task) => set((state) => ({ reportTasks: state.reportTasks.some((item) => item.id === task.id) ? state.reportTasks.map((item) => item.id === task.id ? task : item) : [...state.reportTasks, task] })),
-  saveReportRule: (rule) => set((state) => {
-    const reportRules = state.reportRules.some((item) => item.id === rule.id) ? state.reportRules.map((item) => item.id === rule.id ? rule : item) : [...state.reportRules, rule];
-    return { reportRules, reportTasks: generateReportTasks(state.topics, reportRules, state.reportTasks, state.reports) };
-  }),
+  saveReport: (report, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    const task = get().reportTasks.find((item) => item.id === report.taskId);
+    const topic = get().topics.find((item) => item.id === report.topicId);
+    const existing = get().reports.find((item) => item.id === report.id);
+    if (!operator || !task || !topic) throw new Error('报告、报告期次或操作账号不存在');
+    if (!operator.enabled || !canPerform(operator, get().roles, 'report.submit') || !isTopicLead(operator, topic.id, get().topicMemberships)) throw new Error('只有该课题牵头单位可以保存月季报');
+    if (topic.enabled === false || topic.status === '已暂停' || topic.status === '已结题') throw new Error('当前课题已停用，不能保存月季报');
+    if (task.topicId !== report.topicId || task.reportType !== report.reportType) throw new Error('报告与报告期次不一致');
+    if (!isReportOpen(task)) throw new Error(`该报告将于 ${task.openDate} 开放填报`);
+    if (existing && !isReportEditable(existing.status)) throw new Error('当前报告状态不可修改');
+    const normalized = { ...report, overdue: isReportOverdue(task.deadline, report.submittedAt),
+      recordVersion: (existing?.recordVersion ?? existing?.version ?? 0) + 1,
+      submittedVersion: existing?.submittedVersion ?? 0 };
+    set((state) => ({
+      reports: state.reports.some((item) => item.id === normalized.id)
+        ? state.reports.map((item) => item.id === normalized.id ? normalized : item)
+        : [...state.reports, normalized],
+    }));
+  },
+  saveReportTask: (task, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    const topic = get().topics.find((item) => item.id === task.topicId);
+    if (!operator || !topic) throw new Error('课题或操作账号不存在');
+    if (!operator.enabled || !canPerform(operator, get().roles, 'report.submit') || !isTopicLead(operator, topic.id, get().topicMemberships)) throw new Error('只有该课题牵头单位可以新建月季报');
+    if (topic.enabled === false || topic.status === '已暂停' || topic.status === '已结题') throw new Error('当前课题已停用，不能新建月季报');
+    if (!topic.reportConfig) throw new Error('该课题尚未配置月季报规则');
+    const window = topicReportWindow(topic.reportConfig, task.reportType, task.year, task.period);
+    if (window.openDate !== task.openDate || window.deadline !== task.deadline) throw new Error('报告时间与课题配置不一致');
+    if (!isReportOpen(task)) throw new Error(`该报告将于 ${task.openDate} 开放填报`);
+    const duplicate = get().reportTasks.find((item) => item.id !== task.id && item.topicId === task.topicId && item.reportType === task.reportType && item.year === task.year && item.period === task.period);
+    if (duplicate) throw new Error('该课题当前期次的报告已经存在');
+    set((state) => ({ reportTasks: state.reportTasks.some((item) => item.id === task.id) ? state.reportTasks.map((item) => item.id === task.id ? task : item) : [...state.reportTasks, task] }));
+  },
   submitReport: (id, operatorId) => {
     const report = get().reports.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!report || !operator) throw new Error('报告或操作人不存在');
-    if (!canPerform(operator, get().roles, 'report.submit') || !canAccessTopicByMembership(operator, report.topicId, get().topicMemberships) || !isTopicLead(operator, report.topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以提交月季报');
+    const task = report && get().reportTasks.find((item) => item.id === report.taskId);
+    const topic = report && get().topics.find((item) => item.id === report.topicId);
+    if (!report || !operator || !task || !topic) throw new Error('报告、报告期次或操作人不存在');
+    if (!operator.enabled || !canPerform(operator, get().roles, 'report.submit') || !canAccessTopicByMembership(operator, report.topicId, get().topicMemberships) || !isTopicLead(operator, report.topicId, get().topicMemberships)) throw new Error('只有该课题牵头单位可以提交月季报');
+    if (topic.enabled === false || topic.status === '已暂停' || topic.status === '已结题') throw new Error('当前课题已停用，不能提交月季报');
+    if (!isReportOpen(task)) throw new Error(`该报告将于 ${task.openDate} 开放提交`);
     const status = nextReportStatus(report.status, 'SUBMIT');
-    set((state) => ({ reports: state.reports.map((item) => item.id === id ? { ...item, status, submittedAt: today(), updatedAt: today() } : item) }));
+    const submittedAt = today();
+    const operatedAt = new Date().toISOString();
+    const updated = { ...report, status, submittedAt, overdue: isReportOverdue(task.deadline, submittedAt), updatedAt: today(),
+      recordVersion: (report.recordVersion ?? report.version ?? 0) + 1, submittedVersion: (report.submittedVersion ?? 0) + 1 };
+    const snapshot: SubmissionSnapshot = { id: `snapshot-report-${Date.now()}-${id}`, businessType: 'REPORT', businessId: id,
+      stage: 'REPORT', submittedVersion: updated.submittedVersion, submittedAt: operatedAt, submitterId: operatorId, payload: structuredClone(updated) };
+    set((state) => ({ reports: state.reports.map((item) => item.id === id ? updated : item), submissionSnapshots: [...state.submissionSnapshots, snapshot] }));
   },
   reviewReport: (id, action, operatorId, opinion) => {
     const report = get().reports.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!report || !operator) throw new Error('报告或审批人不存在');
+    if (!report || !operator || !isTopicOperational(get().topics.find((item) => item.id === report.topicId))) throw new Error('报告、审批人不存在或课题当前不可操作');
     const atFinalLevel = report.status === '终审中';
     if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && !canPerform(operator, get().roles, 'report.initial.approve')) throw new Error('没有报告初审权限');
     if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && !canPerform(operator, get().roles, 'report.final.approve')) throw new Error('没有报告终审权限');
@@ -365,56 +415,36 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const record: ApprovalRecord = {
       id: `approval-${Date.now()}-${id}`, businessType: 'REPORT', businessId: id, stage: 'REPORT',
       level: atFinalLevel ? 'FINAL' : 'INITIAL', decision: action === 'RETURN' ? 'RETURNED' : 'APPROVED',
-      opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: report.version,
+      opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: report.submittedVersion ?? 1,
     };
     set((state) => ({
-      reports: state.reports.map((item) => item.id === id ? { ...item, status, updatedAt: today() } : item),
+      reports: state.reports.map((item) => item.id === id ? { ...item, status, updatedAt: today(), recordVersion: (item.recordVersion ?? item.version ?? 0) + 1 } : item),
       approvalRecords: [...state.approvalRecords, record],
     }));
   },
   addSelfFundedProject: (project, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!operator || !isInternalTopicUnit(operator) || !canPerform(operator, get().roles, 'self-funded.manage') || !canAccessTopicByMembership(operator, project.topicId, get().topicMemberships) || project.ownerUnitId !== operator.unitId) throw new Error('没有该课题配套自筹项目的维护权限');
+    if (!operator || !isTopicOperational(get().topics.find((item) => item.id === project.topicId)) || !isInternalTopicUnit(operator) || !canPerform(operator, get().roles, 'self-funded.manage') || !canAccessTopicByMembership(operator, project.topicId, get().topicMemberships) || project.ownerUnitId !== operator.unitId) throw new Error('没有该课题配套自筹项目的维护权限');
     set((state) => ({ selfFundedProjects: [...state.selfFundedProjects, project] }));
   },
   saveArchiveSubmission: (submission, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!operator) throw new Error('操作账号不存在');
-    const canPublic = submission.ownerType === 'PROJECT_PUBLIC' && canPerform(operator, get().roles, 'archive.public.submit');
+    if (!operator || !isTopicOperational(get().topics.find((item) => item.id === submission.topicId))) throw new Error('操作账号不存在或课题当前不可操作');
     const canNational = submission.ownerType === 'TOPIC_NATIONAL' && canPerform(operator, get().roles, 'archive.topic.submit') && canAccessTopicByMembership(operator, submission.topicId, get().topicMemberships) && submission.unitId === operator.unitId;
     const project = submission.ownerType === 'SELF_FUNDED' ? get().selfFundedProjects.find((item) => item.id === submission.ownerId) : undefined;
     const canSelf = Boolean(project && isInternalTopicUnit(operator) && canPerform(operator, get().roles, 'self-funded.manage') && project.ownerUnitId === operator.unitId);
-    if (!canPublic && !canNational && !canSelf) throw new Error('没有该归档记录的编辑权限');
+    if (!canNational && !canSelf) throw new Error('没有该归档记录的编辑权限');
     set((state) => ({ archiveSubmissions: state.archiveSubmissions.some((item) => item.id === submission.id) ? state.archiveSubmissions.map((item) => item.id === submission.id ? submission : item) : [...state.archiveSubmissions, submission] }));
   },
   submitArchive: (id, operatorId) => {
     const submission = get().archiveSubmissions.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
-    if (!submission || !operator) throw new Error('归档记录或操作人不存在');
-    const canSubmitPublic = submission.ownerType === 'PROJECT_PUBLIC' && canPerform(operator, get().roles, 'archive.public.submit');
+    if (!submission || !operator || !isTopicOperational(get().topics.find((item) => item.id === submission.topicId))) throw new Error('归档记录、操作人不存在或课题当前不可操作');
     const canSubmitNational = submission.ownerType === 'TOPIC_NATIONAL' && canPerform(operator, get().roles, 'archive.topic.submit') && canAccessTopicByMembership(operator, submission.topicId, get().topicMemberships) && submission.unitId === operator.unitId;
     const selfProject = submission.ownerType === 'SELF_FUNDED' ? get().selfFundedProjects.find((item) => item.id === submission.ownerId) : undefined;
     const canSubmitSelf = Boolean(selfProject && isInternalTopicUnit(operator) && canPerform(operator, get().roles, 'self-funded.manage') && selfProject.ownerUnitId === operator.unitId);
-    if (!canSubmitPublic && !canSubmitNational && !canSubmitSelf) throw new Error('没有该归档记录的提交权限');
+    if (!canSubmitNational && !canSubmitSelf) throw new Error('没有该归档记录的提交权限');
     set((state) => ({ archiveSubmissions: state.archiveSubmissions.map((item) => item.id === id ? { ...item, status: '已归档', submittedAt: today(), updatedAt: today() } : item) }));
-  },
-  reviewArchive: (id, action, operatorId, opinion) => {
-    const submission = get().archiveSubmissions.find((item) => item.id === id);
-    const operator = get().users.find((item) => item.id === operatorId);
-    if (!submission || !operator) throw new Error('归档记录或审批人不存在');
-    const atFinalLevel = submission.status === '终审中';
-    if ((action === 'APPROVE_INITIAL' || (action === 'RETURN' && !atFinalLevel)) && !canPerform(operator, get().roles, 'archive.initial.approve')) throw new Error('没有归档材料初审权限');
-    if ((action === 'APPROVE_FINAL' || (action === 'RETURN' && atFinalLevel)) && !canPerform(operator, get().roles, 'archive.final.approve')) throw new Error('没有归档材料终审权限');
-    const status = nextArchiveStatus(submission.ownerType, submission.status, action);
-    const record: ApprovalRecord = {
-      id: `approval-${Date.now()}-${id}`, businessType: 'ARCHIVE', businessId: id, stage: 'ARCHIVE',
-      level: atFinalLevel ? 'FINAL' : 'INITIAL', decision: action === 'RETURN' ? 'RETURNED' : 'APPROVED',
-      opinion, operatorId, operatedAt: new Date().toISOString(), submittedVersion: submission.version,
-    };
-    set((state) => ({
-      archiveSubmissions: state.archiveSubmissions.map((item) => item.id === id ? { ...item, status, updatedAt: today() } : item),
-      approvalRecords: [...state.approvalRecords, record],
-    }));
   },
   addArchiveCategory: (category) => set((state) => ({ archiveCategories: [...state.archiveCategories, category] })),
   updateArchiveCategory: (id, updates) => set((state) => ({ archiveCategories: state.archiveCategories.map((category) => category.id === id ? { ...category, ...updates } : category) })),
@@ -422,9 +452,26 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   addArchiveMaterial: (material) => set((state) => ({ archiveMaterials: [...state.archiveMaterials, material] })),
   updateArchiveMaterial: (id, updates) => set((state) => ({ archiveMaterials: state.archiveMaterials.map((material) => material.id === id ? { ...material, ...updates } : material) })),
   removeArchiveMaterial: (id) => set((state) => ({ archiveMaterials: state.archiveMaterials.filter((material) => material.id !== id) })),
-  addArchiveRequirement: (requirement) => set((state) => ({ archiveRequirements: [...state.archiveRequirements, requirement] })),
+  addArchiveRequirement: (requirement, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    const isPrivateTopicFolder = requirement.ownerType === 'TOPIC_NATIONAL' && !requirement.sourceCode && Boolean(requirement.topicId && requirement.unitId);
+    if (!operator || !isPrivateTopicFolder || !isTopicOperational(get().topics.find((item) => item.id === requirement.topicId)) || !canPerform(operator, get().roles, 'archive.topic.submit') || operator.unitId !== requirement.unitId || !canAccessTopicByMembership(operator, requirement.topicId, get().topicMemberships)) throw new Error('没有新建该单位材料文件夹的权限');
+    const duplicate = get().archiveRequirements.some((item) => item.ownerType === 'TOPIC_NATIONAL' && !item.sourceCode && item.topicId === requirement.topicId && item.unitId === requirement.unitId && item.name.trim() === requirement.name.trim());
+    if (duplicate) throw new Error('本单位材料中已存在同名文件夹');
+    set((state) => ({ archiveRequirements: [...state.archiveRequirements, requirement] }));
+  },
   updateArchiveRequirement: (id, updates) => set((state) => ({ archiveRequirements: state.archiveRequirements.map((requirement) => requirement.id === id ? { ...requirement, ...updates } : requirement) })),
-  removeArchiveRequirement: (id) => set((state) => ({ archiveRequirements: state.archiveRequirements.filter((requirement) => requirement.id !== id) })),
+  removeArchiveRequirement: (id, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    const requirement = get().archiveRequirements.find((item) => item.id === id);
+    if (!operator || !requirement || requirement.ownerType !== 'TOPIC_NATIONAL' || requirement.sourceCode || !requirement.topicId || !requirement.unitId || !isTopicOperational(get().topics.find((item) => item.id === requirement.topicId)) || operator.unitId !== requirement.unitId || !canPerform(operator, get().roles, 'archive.topic.submit') || !canAccessTopicByMembership(operator, requirement.topicId, get().topicMemberships)) throw new Error('没有删除该单位材料文件夹的权限');
+    const relatedSubmissions = get().archiveSubmissions.filter((item) => item.requirementId === id);
+    if (relatedSubmissions.some((item) => (item.files?.length ?? 0) > 0 || item.fileIds.length > 0)) throw new Error('该文件夹中已有材料，请先删除文件后再删除文件夹');
+    set((state) => ({
+      archiveRequirements: state.archiveRequirements.filter((item) => item.id !== id),
+      archiveSubmissions: state.archiveSubmissions.filter((item) => item.requirementId !== id),
+    }));
+  },
   addPowerGridReq: (requirement) => set((state) => ({ topicPowerGridRequirements: [...state.topicPowerGridRequirements, requirement] })),
   updatePowerGridReq: (id, updates) => set((state) => ({ topicPowerGridRequirements: state.topicPowerGridRequirements.map((requirement) => requirement.id === id ? { ...requirement, ...updates } : requirement) })),
   removePowerGridReq: (id) => set((state) => ({ topicPowerGridRequirements: state.topicPowerGridRequirements.filter((requirement) => requirement.id !== id) })),
@@ -449,11 +496,17 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     if (!current) return;
     const next = { ...current, ...updates };
     if (isTopicUnitRole(next.role) && get().users.some((item) => item.id !== id && item.enabled && item.unitId === next.unitId && isTopicUnitRole(item.role))) throw new Error('该单位已经存在课题单位账号');
-    set((state) => ({ users: state.users.map((user) => user.id === id ? next : user) }));
+    set((state) => ({
+      users: state.users.map((user) => user.id === id ? next : user),
+      currentUser: state.currentUser?.id === id ? next : state.currentUser,
+    }));
   },
   removeUser: (id) => set((state) => ({ users: state.users.filter((user) => user.id !== id) })),
   resetUserPassword: (id) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, password: '123456' } : user) })),
-  toggleUserEnabled: (id, enabled) => set((state) => ({ users: state.users.map((user) => user.id === id ? { ...user, enabled } : user) })),
+  toggleUserEnabled: (id, enabled) => set((state) => ({
+    users: state.users.map((user) => user.id === id ? { ...user, enabled } : user),
+    currentUser: state.currentUser?.id === id ? (enabled ? { ...state.currentUser, enabled } : null) : state.currentUser,
+  })),
   addRole: (role) => set((state) => ({ roles: [...state.roles, role] })),
   updateRole: (id, updates) => set((state) => ({ roles: state.roles.map((role) => role.id === id && !role.builtIn ? { ...role, ...updates, pagePermissions: role.name === '外部课题单位' ? (updates.pagePermissions ?? role.pagePermissions).filter((item) => item !== 'self-funded-archive') : updates.pagePermissions ?? role.pagePermissions, actionPermissions: role.name === '外部课题单位' ? (updates.actionPermissions ?? role.actionPermissions).filter((item) => item !== 'self-funded.manage') : updates.actionPermissions ?? role.actionPermissions, updatedAt: new Date().toISOString() } : role) })),
   toggleRoleEnabled: (id, enabled) => set((state) => ({ roles: state.roles.map((role) => role.id === id && !role.builtIn ? { ...role, enabled, updatedAt: new Date().toISOString() } : role) })),
@@ -479,7 +532,8 @@ export function createAppStore() {
 
 export function migratePersistedState(persistedState: unknown): AppState {
   const defaults = createInitialState();
-  const persisted = persistedState && typeof persistedState === 'object' ? persistedState as Partial<AppData> : {};
+  const persistedRecord = persistedState && typeof persistedState === 'object' ? persistedState as Partial<AppData> & { reportRules?: unknown } : {};
+  const { reportRules: _removedReportRules, ...persisted } = persistedRecord;
   const units = (persisted.units ?? defaults.units).map((unit) => unit.id === 'u-sgcc' && unit.name === '国家电网公司'
     ? defaults.units.find((item) => item.id === unit.id)!
     : unit);
@@ -497,7 +551,36 @@ export function migratePersistedState(persistedState: unknown): AppState {
   const selfFundedProjects = (persisted.selfFundedProjects ?? defaults.selfFundedProjects).map((project) => project.implementingUnit === '国家电网公司'
     ? { ...project, implementingUnit: '广西电网公司' }
     : project);
-  const topics = persisted.topics ?? defaults.topics;
+  const topics = (persisted.topics ?? defaults.topics).map((topic) => ({
+    ...topic,
+    reportConfig: topic.reportConfig ?? defaults.topics.find((item) => item.id === topic.id)?.reportConfig ?? createDefaultTopicReportConfig(),
+  }));
+  const sourceArchiveRequirements = persisted.archiveRequirements ?? defaults.archiveRequirements;
+  const sourceArchiveSubmissions = persisted.archiveSubmissions ?? defaults.archiveSubmissions;
+  const legacyPrivateFolders = sourceArchiveRequirements.filter((requirement) => requirement.ownerType === 'TOPIC_NATIONAL' && !requirement.sourceCode && requirement.topicId && !requirement.unitId);
+  const legacyFolderUnits = new Map(legacyPrivateFolders.map((requirement) => {
+    const submittedUnits = sourceArchiveSubmissions
+      .filter((submission) => submission.requirementId === requirement.id)
+      .map((submission) => submission.unitId ?? submission.ownerId.split(':')[1])
+      .filter((unitId): unitId is string => Boolean(unitId));
+    const fallbackUnitId = topics.find((topic) => topic.id === requirement.topicId)?.leadingUnitId;
+    return [requirement.id, [...new Set(submittedUnits.length ? submittedUnits : fallbackUnitId ? [fallbackUnitId] : [])]];
+  }));
+  const privateFolderId = (requirementId: string, unitId: string) => {
+    const units = legacyFolderUnits.get(requirementId) ?? [];
+    return units.length > 1 ? `${requirementId}-${unitId}` : requirementId;
+  };
+  const archiveRequirements = sourceArchiveRequirements.flatMap((requirement) => {
+    const units = legacyFolderUnits.get(requirement.id);
+    if (!units) return [requirement];
+    return units.map((unitId) => ({ ...requirement, id: privateFolderId(requirement.id, unitId), unitId }));
+  });
+  const archiveSubmissions = sourceArchiveSubmissions.map((submission) => {
+    const units = legacyFolderUnits.get(submission.requirementId);
+    if (!units) return submission;
+    const unitId = submission.unitId ?? submission.ownerId.split(':')[1] ?? units[0];
+    return unitId ? { ...submission, requirementId: privateFolderId(submission.requirementId, unitId), unitId } : submission;
+  });
   const nodes = persisted.nodes ?? defaults.nodes;
   const finalNodeId = nodes.at(-1)?.id ?? defaults.nodes.at(-1)!.id;
   const customDefinitions = (persisted.indicatorDefinitions ?? []).filter((item) => !item.builtIn);
@@ -546,6 +629,16 @@ export function migratePersistedState(persistedState: unknown): AppState {
   const roles = (persisted.roles ?? defaults.roles).map((role) => role.name === '项目技术负责人' || role.name === '科研助理'
     ? { ...role, actionPermissions: [...new Set([...role.actionPermissions, ...requiredTopicActions])] }
     : role);
+  const achievements = (persisted.achievements ?? defaults.achievements).map((achievement) => ({
+    ...achievement,
+    recordVersion: achievement.recordVersion ?? 1,
+    submittedVersion: achievement.submittedVersion ?? (['预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(achievement.status) ? 0 : 1),
+  }));
+  const reports = (persisted.reports ?? defaults.reports).map((report) => ({
+    ...report,
+    recordVersion: report.recordVersion ?? report.version ?? 1,
+    submittedVersion: report.submittedVersion ?? (report.status === '草稿' || report.status === '退回修改' ? 0 : 1),
+  }));
 
   return {
     ...defaults,
@@ -559,12 +652,18 @@ export function migratePersistedState(persistedState: unknown): AppState {
     topicIndicators,
     unitIndicatorAllocations,
     roles,
+    achievements,
+    reports,
+    submissionSnapshots: persisted.submissionSnapshots ?? [],
     selfFundedProjects,
+    archiveRequirements,
+    archiveSubmissions,
+    reportTasks: (persisted.reportTasks ?? defaults.reportTasks).filter((task) => reports.some((report) => report.taskId === task.id)),
   } as AppState;
 }
 
 export const useAppStore = create<AppState>()(
-  persist(stateCreator, { name: 'gzxm-research-management-v5', version: 7, migrate: migratePersistedState }),
+  persist(stateCreator, { name: 'gzxm-research-management-v5', version: 10, migrate: migratePersistedState }),
 );
 
 export const canEditAchievement = (status: string): boolean => ['草稿', '退回修改', '预审草稿', '预审退回', '正式成果草稿', '正式退回'].includes(status);

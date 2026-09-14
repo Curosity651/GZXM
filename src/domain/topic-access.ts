@@ -3,6 +3,7 @@ import type { Achievement, Topic, TopicUnitMembership, User } from '../types';
 export const isGlobalUser = (user: User) => ['系统管理员', '项目技术负责人', '科研助理'].includes(user.role);
 export const isTopicUnitUser = (user: User) => ['内部课题单位', '外部课题单位'].includes(user.role);
 export const isInternalTopicUnit = (user: User) => user.role === '内部课题单位';
+export const isTopicOperational = (topic: Topic | undefined) => Boolean(topic && topic.enabled !== false && topic.status !== '已暂停' && topic.status !== '已结题');
 
 export function membershipsForUser(user: User, memberships: TopicUnitMembership[]): TopicUnitMembership[] {
   if (!user.unitId) return [];
@@ -37,9 +38,9 @@ export function canManageTopicUnits(user: User, topicId: string, memberships: To
 }
 
 export function canViewAchievement(user: User, achievement: Achievement, memberships: TopicUnitMembership[]): boolean {
-  if (user.role === '系统管理员') return false;
-  if (user.role === '项目技术负责人' || user.role === '科研助理') return true;
+  if (isGlobalUser(user)) return true;
   if (!user.unitId) return false;
+  if (!membershipForUser(user, achievement.topicId, memberships)) return false;
   if (isTopicLead(user, achievement.topicId, memberships)) return true;
   return achievement.uploadUnitId === user.unitId || achievement.unitId === user.unitId;
 }

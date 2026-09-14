@@ -133,7 +133,7 @@ export interface Achievement {
   createdAt: string; updatedAt: string; submittedAt?: string; remarks: string;
 
   approvalOpinion?: string; approvedAt?: string; approver?: string;
-  recordVersion?: number; externalSubmissionDate?: string; externalSubmissionNumber?: string;
+  recordVersion?: number; submittedVersion?: number; externalSubmissionDate?: string; externalSubmissionNumber?: string;
   returnReason?: string; abstract?: string; keywords?: string; researchDirection?: string;
   history?: AchievementHistoryRecord[];
 
@@ -244,6 +244,7 @@ export interface ArchiveMaterialVersion {
 export interface ArchiveRequirement {
   id: string; projectId: string; categoryId: string; name: string;
   topicId?: string;
+  unitId?: string;
   required: boolean; requiredQuantity: number;
   applicableNodeId?: string; description?: string;
   ownerType?: 'PROJECT_PUBLIC' | 'TOPIC_NATIONAL' | 'SELF_FUNDED';
@@ -306,19 +307,18 @@ export type UserRole =
 export type DataScope = 'ALL' | 'TOPICS';
 
 export type PagePermissionKey =
-  | 'home' | 'topic-indicator' | 'indicator-monitoring' | 'warning-rules'
+  | 'home' | 'topic-indicator'
   | 'achievement-entry'
   | 'report-management'
-  | 'project-public-archive' | 'topic-archive' | 'self-funded-archive'
-  | 'archive-review' | 'archive-monitoring'
+  | 'topic-archive' | 'self-funded-archive' | 'archive-monitoring'
   | 'user-management' | 'role-permission' | 'dictionary' | 'system-config';
 
 export type ActionPermissionKey =
   | 'topic.manage' | 'indicator.manage' | 'topic-indicator.publish'
-  | 'topic-unit.manage' | 'unit-allocation.manage' | 'unit-allocation.publish' | 'warning.manage'
+  | 'topic-unit.manage' | 'unit-allocation.manage' | 'unit-allocation.publish'
   | 'achievement.submit' | 'achievement.initial.approve' | 'achievement.final.approve'
   | 'report.submit' | 'report.initial.approve' | 'report.final.approve' | 'report.rule.manage'
-  | 'archive.public.submit' | 'archive.topic.submit' | 'archive.initial.approve' | 'archive.final.approve'
+  | 'archive.topic.submit'
   | 'self-funded.manage' | 'system.manage';
 
 export interface RbacRole {
@@ -360,19 +360,7 @@ export interface ApprovalRecord {
 }
 
 export type ReportType = 'MONTHLY' | 'QUARTERLY';
-export type ReportStatus = '未填报' | '草稿' | '初审中' | '终审中' | '已通过' | '退回修改';
-
-export interface ReportSubmissionRule {
-  id: string;
-  reportType: ReportType;
-  enabled: boolean;
-  effectiveYear: number;
-  openDay: number;
-  deadlineDay: number;
-  quarterlyMonths: number[];
-  updatedAt: string;
-  updatedBy?: string;
-}
+export type ReportStatus = '草稿' | '初审中' | '终审中' | '已通过' | '退回修改';
 
 export interface ReportTask {
   id: string;
@@ -382,7 +370,17 @@ export interface ReportTask {
   period: number;
   openDate: string;
   deadline: string;
-  ruleId: string;
+}
+
+export interface SubmissionSnapshot {
+  id: string;
+  businessType: 'ACHIEVEMENT' | 'REPORT';
+  businessId: string;
+  stage: ApprovalStage;
+  submittedVersion: number;
+  submittedAt: string;
+  submitterId: string;
+  payload: unknown;
 }
 
 export interface ProgressReport {
@@ -398,7 +396,10 @@ export interface ProgressReport {
   problemsAndMeasures: string;
   status: ReportStatus;
   overdue: boolean;
-  version: number;
+  /** @deprecated 兼容旧版 Mock 数据，业务版本统一使用 recordVersion/submittedVersion。 */
+  version?: number;
+  recordVersion?: number;
+  submittedVersion?: number;
   submittedAt?: string;
   updatedAt: string;
 }
